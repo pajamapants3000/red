@@ -7,8 +7,9 @@
  * License: MIT; See LICENSE!
  * Notes  : Notes on successful compilation
  * Created: 10/16/2016
- * Updated: 10/16/2016
  */
+
+// TODO: Change all instances of `unwrap` to proper error handling
 
 //! A re-implementation of the classic `ed` program in Rust
 //!
@@ -22,37 +23,56 @@
 
 use std::env;
 use std::fs::{File, OpenOptions};
-use::std::io::Error;
+use::std::io::prelude::*;
+// Use LineWriter instead of, or in addition to, BufWriter?
+use::std::io::{self,BufReader,BufWriter,Error};
+
 // }}}
 
+// *** Constants *** {{{
 // Define messages
 // Some of these may be removed if builtin error descriptions work
 const S_FOPEN: &'static str = "successfully opened file!";
 //const E_FOPEN: &'static str = "unable to open file";
 
-// Define file-mode flags, to be set by user options and commands
-// I would prefer using 2.pow(x) but function calls not allowed in const def
-//const F_EXEC: usize = 0b00000001;   // execute
-const F_WRIT: u8 = 0b00000010;   // write
-const F_READ: u8 = 0b00000100;   // read
-const F_APPE: u8 = 0b00001000;   // append
-const F_TRUN: u8 = 0b00010000;   // truncate
-const F_CREA: u8 = 0b00100000;   // create
-const F_CNEW: u8 = 0b01000000;   // create new
-//const F_RESE: usize = 0b10000000;   // reserved
+// Additional string constants
+const LINE_CONT: &'static str = "\\\n";
+const PROMPT: &'static str = "%";
+const PROMPT_CONT: &'static str = ">";
 
+// ^^^ Constants ^^^ }}}
+
+// *** Data Structures *** {{{
+#[derive(Default)]
+struct FileMode {
+    f_write:        bool,
+    f_read:         bool,
+    f_append:       bool,
+    f_truncate:     bool,
+    f_create:       bool,
+    f_create_new:   bool,
+}
+
+struct Command<'a> {
+    address_initial: u32,
+    address_final: u32,
+    operation: char,
+    parameters: &'a str,
+}
+
+// ^^^ Data Structures ^^^ }}}
+
+// Main {{{
 fn main() {
-    // take as direct arg; will later be arg to flag
-//    let file_name: &str = env::args[1].clone();
-
-    // quick'n''dirty - will process one by one later
+    // quick'n''dirty - will process one by one later; clap?
     let args: Vec<String> = env::args().collect();
 
-    let file_mode: u8 = F_READ;
-
+    // take as direct arg; will later be arg to flag
+    let file_name: &str = &args[0];
+    let file_mode = FileMode { f_read: true, ..Default::default() };
     let file_opened: File;
 
-    match file_opener( &args[1], file_mode ) {
+    match file_opener( file_name, file_mode ) {
         Ok(f) => {
             file_opened = f;
             println!( "{}", S_FOPEN );
@@ -63,28 +83,83 @@ fn main() {
 
         },
     };
+
+    //let mut file_buffer = BufReader::new(file_opened);
+    //let mut file_writer = LineWriter::new(file_opened);
+    let mut cli_reader = BufReader::new(io::stdin());
+    let mut cli_writer = BufWriter::new(io::stdout());
+    let mut cmd_input = String::new();
+    let mut prompt = PROMPT.to_string();
+
+    cli_writer.write(format!("{}", prompt).as_bytes()).unwrap();
+    cli_writer.flush().unwrap();
+    // Main interaction loop {{{
+    loop {
+        cli_reader.read_line(&mut cmd_input).unwrap();
+
+        if cmd_input.ends_with(LINE_CONT) {  // continue
+            prompt = PROMPT_CONT.to_string();
+        } else {
+            {                                            // Execute command {{{
+                let command: Command = parse_command( &cmd_input );
+                // just some test output
+                cli_writer.write(command.parameters.as_bytes()).unwrap();
+                cli_writer.write(command.address_initial.to_string()
+                                 .as_bytes()).unwrap();
+                cli_writer.write(b"\n").unwrap();
+                cli_writer.write(command.address_final.to_string()
+                                 .as_bytes()).unwrap();
+                cli_writer.write(b"\n").unwrap();
+                cli_writer.write(command.operation.to_string()
+                                 .as_bytes()).unwrap();
+                cli_writer.write(b"\n").unwrap();
+
+            }                                           // Done executing }}}
+            // ready for a new command
+            cmd_input.clear();
+            // in case of continuation, return prompt to standard
+            prompt = PROMPT.to_string();
+        }
+
+        // prompt for the next round
+        cli_writer.write(format!("{}", prompt).as_bytes()).unwrap();
+        // put it all to the screen
+        cli_writer.flush().unwrap();
+    }
+    //}}}
     
 }
+//}}}
 
-/// Opens file with user-specified name in user-specified mode
+/// Opens file with user-specified name and mode {{{
 ///
 /// Uses global definitions of mode flags in this file
 ///
 /// Returns direct result of call to OpenOptions::new()
-/// Will return an error if the file could not be opened
-/// Otherwise, returns a File object
-fn file_opener( name: &str, mode: u8 ) -> Result<File, Error> {
+/// This is of type Result<File, Error>
+fn file_opener( name: &str, mode: FileMode ) -> Result<File, Error> {
 
     // let's introduce OpenOptions now, though we don't need it
     // until we introduce more functionality
     OpenOptions::new()
-        .read(          ( mode | F_READ ) == F_READ )
-        .write(         ( mode | F_WRIT ) == F_WRIT )
-        .append(        ( mode | F_APPE ) == F_APPE )
-        .truncate(      ( mode | F_TRUN ) == F_TRUN )
-        .create(        ( mode | F_CREA ) == F_CREA )
-        .create_new(    ( mode | F_CNEW ) == F_CNEW )
+        .read(mode.f_read)
+        .write(mode.f_write)
+        .append(mode.f_append)
+        .truncate(mode.f_truncate)
+        .create(mode.f_create)
+        .create_new(mode.f_create_new)
         .open( name )
-
 }
+//}}}
 
+/// Parses command-mode input {{{
+///
+fn parse_command( _cmd_input: &str ) -> Command {
+    Command {
+        address_initial: 1,
+        address_final: 1,
+        operation: 'p',
+        parameters: _cmd_input,
+    }
+}
+//]]]
