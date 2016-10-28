@@ -21,16 +21,14 @@
 // Bring in to namespace {{{
 //extern crate clap;
 
-use std::env;
-use std::fs::{File, OpenOptions};
-use::std::io::prelude::*;
-// Use LineWriter instead of, or in addition to, BufWriter?
-use::std::io::{self,BufReader,BufWriter};
-
+mod io;
 mod parse;
 mod error;
 #[cfg(test)]
 mod tests;
+
+use std::env;
+use io::FileMode;
 
 // }}}
 
@@ -39,27 +37,12 @@ mod tests;
 
 // *** Constants *** {{{
 // Define messages
-// Some of these may be removed if builtin error descriptions work
-const S_FOPEN_MSG: &'static str = "successfully opened file!";
-//const E_FOPEN_MSG: &'static str = "unable to open file";
 
 // Additional string constants
-const LINE_CONT: &'static str = "\\\n";
-const PROMPT: &'static str = "%";
-const PROMPT_CONT: &'static str = ">";
 
 // ^^^ Constants ^^^ }}}
 
 // *** Data Structures *** {{{
-#[derive(Default)]
-struct FileMode {
-    f_write:        bool,
-    f_read:         bool,
-    f_append:       bool,
-    f_truncate:     bool,
-    f_create:       bool,
-    f_create_new:   bool,
-}
 
 // ^^^ Data Structures ^^^ }}}
 
@@ -147,27 +130,6 @@ fn main() {
 //}}}
 
 // *** Functions *** {{{
-
-/// Opens file with user-specified name and mode {{{
-///
-/// Uses global definitions of mode flags in this file
-///
-/// Returns direct result of call to OpenOptions::new()
-/// This is of type Result<File, io::Error>
-fn file_opener( name: &str, mode: FileMode ) -> Result<File, io::Error> {
-
-    // let's introduce OpenOptions now, though we don't need it
-    // until we introduce more functionality
-    OpenOptions::new()
-        .read(mode.f_read)
-        .write(mode.f_write)
-        .append(mode.f_append)
-        .truncate(mode.f_truncate)
-        .create(mode.f_create)
-        .create_new(mode.f_create_new)
-        .open( name )
-}
-//}}}
 
 // ^^^ Functions ^^^ }}}
 
