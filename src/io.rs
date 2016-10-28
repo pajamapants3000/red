@@ -11,6 +11,8 @@
 
 // *** Bring in to namespace *** {{{
 use std::fs::{File, OpenOptions};
+use std::path::Path;
+
 // ^^^ Bring in to namespace ^^^ }}}
 //
 // *** Attributes *** {{{
@@ -34,16 +36,19 @@ pub struct FileMode {
     pub f_create_new:   bool,
 }
 
+/*
 struct FileCoordinate {
     line: usize,
     col: usize,
 }
+*/
 // ^^^ Data Structures ^^^ }}}
 
 // *** Functions *** {{{
+/*
 /// Return next occurrence of regular expression
 regex_search( needle: &str, from: FileCoordinate ) -> FileCoordinate {
-}
+} */
 
 /// Opens file with user-specified name and mode {{{
 ///
@@ -51,7 +56,7 @@ regex_search( needle: &str, from: FileCoordinate ) -> FileCoordinate {
 ///
 /// Returns direct result of call to OpenOptions::new()
 /// This is of type Result<File, io::Error>
-pub fn file_opener( name: &str, mode: FileMode ) -> Result<File, io::Error> {
+pub fn file_opener( name: Path, mode: FileMode ) -> Result<File, io::Error> {
 
     // let's introduce OpenOptions now, though we don't need it
     // until we introduce more functionality
