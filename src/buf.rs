@@ -15,14 +15,15 @@ extern crate chrono;
 // Use LineWriter instead of, or in addition to, BufWriter?
 use std::io::prelude::*;
 use std::io::BufReader;
-use std::fs::{File, OpenOptions};
-use std::fs::path::Path;
+use std::fs::File;
+use std::path::Path;
 use std::collections::LinkedList;
+use std::collections::linked_list::Iter;
 
-use chrono::naive::datetime::NaiveDateTime;
-use chrono::datetime::DateTime;
+use self::chrono::*;
 
-use io::*
+use io::*;
+use error::*;
 
 // ^^^ Bring in to namespace ^^^ }}}
 // *** Attributes *** {{{
@@ -36,8 +37,8 @@ use io::*
 /// Command - read output of specified command
 /// None - no input
 enum BufferInput {
-    File(Path),
-    Command(String),    // OsString?
+    File(Path),         // box it?
+    Command(String),    // OsString? box it?
     None,
 }
 /// Single assignment of a marker to a line
@@ -67,32 +68,76 @@ pub struct Buffer {
     total_lines: usize,
     /// buffer has read in contents of working file or command output
     is_initialized: bool,
-    /// Date and time of last write to buffer file
-    last_updated: DateTime<UTC>,
+    /// Date and time of last read of source file
+    last_update: DateTime<UTC>,
+    /// Date and time of last write to disk under temporary file name
+    last_temp_write: DateTime<UTC>,
     /// Date and time of last write to disk under permanent file name
-    last_written: DateTime<UTC>,
+    last_write: DateTime<UTC>,
 }
 impl Buffer {
     pub fn new( content: BufferInput, output_file: Option<Path> ) -> Buffer {
-        let mut _lines: LinkedList<String>;
-        let mut _file: Path;                // need to initialize?
-        // move to return?
-        let mut _buffer_file = output_file;
-        let mut _markers: Vec<Marker> = Vec::new();
-        let mut _current_line: usize;
-        let mut _total_lines: usize;
-        let mut _is_initialized: bool = false;
-        let mut _last_updated: DateTime<UTC> = DateTime::from_utc(
-            NaiveDateTime::from_timestamp(0, 0), UTC::Offset );
-        let mut _last_written: DateTime<UTC> = DateTime::from_utc(
-            NaiveDateTime::from_timestamp(0, 0), UTC::Offset );
-        // end 'move to return?'
-
+        let mut _lines = Buffer::get_lines( content );
+        let _total_lines = _lines.len();
+        Buffer {
+            lines: _lines,
+            file: match content {
+                BufferInput::File(x) => Some(x),
+                _ => None,
+            },
+            buffer_file: output_file,
+            markers: Vec::new(),
+            current_line: _total_lines,     // usize; should be Copy
+            total_lines: _total_lines,
+            last_update: match content {
+                BufferInput::File(x) => DateTime::now(),
+                _ => get_null_time(),
+            },
+            last_temp_write: match content {
+                BufferInput::File(x) => DateTime::now(),
+                _ => get_null_time(),
+            },
+            last_write: get_null_time(),
+        }
+    }
+    pub fn get_file_name( &self ) -> String {
+    }
+    pub fn set_file_name( &self, file_name: &str ) -> Result<(), RedError> {
+    }
+    pub fn get_line_content( &self, line: usize ) -> Result<&str, RedError> {
+    }
+    pub fn set_line_content( &self, line: usize ) -> Result<&str, RedError> {
+    }
+    pub fn line_iterator( &self ) -> Iter<String> {
+    }
+    pub fn mut_line_iterator( &self ) -> Iter<String> {
+    }
+    pub fn get_current_line_number( &self ) -> usize {
+    }
+    pub fn does_line_match_regex( &self, line: usize, regex: &str ) -> bool {
+    }
+    pub fn get_marker( &self, label: char ) -> Option<usize> {
+    }
+    pub fn set_marker( &self, line: usize, label: char ) -> Result<(), RedError> {
+    }
+    pub fn list_markers( &self ) -> Vec<(char, usize)> {
+    }
+    pub fn write_to_disk( &self ) -> Result<(), RedError> {
+    }
+    pub fn num_lines( &self ) -> usize {
+        self.total_lines
+    }
+    fn store_buffer( &self ) -> Result<(), RedError> {
+    }
+    // later, change approach to homogenize file/stdout source
+    // generate iterator over BufRead object, either file, stdout, or empty
+    fn get_lines( content: BufferInput ) -> LinkedList<String> {
+        let mut result: LinkedList<String>;
         match content {
             BufferInput::File( file_path ) => {
-                _file = file_path;
+                let _file = file_path;
                 let file_mode = FileMode{ f_read: true, ..Default::default() };
-                if _file.exists() {
+                if !_file.exists() {
                     file_mode.f_write = true;
                     file_mode.f_create = true;
                 }
@@ -104,58 +149,23 @@ impl Buffer {
                 // it seems like this happens on the iterator level, never
                 // needing to do the iteration - should be efficient
                 // (again... that's my intention!)
-                _lines = from_iter<Lines>(
-                        reader.lines()
-                        .map( |result| result.unwrap() );
+                LinkedList::from_iter( reader.lines()
+                                  .map( |result| result.unwrap() ));
             },
             BufferInput::Command(command) => {
-                _lines = LinkedList::new();
-                _lines.push_back(
+                result = LinkedList::new();
+                result.push_back(
                     "Command buffer not yet implemented, but thank you
                     for trying!"
                     );
+                result
             },
             BufferInput::None => {
-                _lines = LinkedList::new();
-                _lines.push_back( "No input provided" );
+                result = LinkedList::new();
+                result.push_back( "No input provided" );
+                result
             },
         }
-        _total_lines = _lines.len();
-        _current_line = _total_lines;       // usize; should be Copy
-        Buffer {
-            lines: _lines,
-            file: _file,
-            buffer_file: _buffer_file,
-            markers: _markers,
-            current_line: _current_line,
-            total_lines: _total_lines,
-            is_initialized: _is_initialized,
-            last_updated: _last_updated,
-            last_written: _last_written,
-    }
-    pub fn get_file_name( &self ) -> String {
-    }
-    pub fn set_file_name( &self, &str ) -> Result<()> {
-    }
-    pub fn get_line_content( &self, line: usize ) -> Result<&str> {
-    }
-    pub fn set_line_content( &self, line: usize ) -> Result<&str> {
-    }
-    pub fn get_current_line_number( &self ) -> usize {
-    }
-    pub fn does_line_match_regex( &self, line: usize, regex: &str ) -> bool {
-    }
-    pub fn get_marker( &self, label: char ) -> Option<usize> {
-    }
-    pub fn set_marker( &self, line: usize, label: char ) -> Result<()> {
-    }
-    pub fn list_markers( &self ) -> Vec<(char, usize)> {
-    }
-    pub fn write_to_disk( &self ) -> Result<()> {
-    }
-    fn store_buffer( &self ) -> Result<()> {
-    }
-    fn initialize_buffer( &self, content: BufferInput ) -> Result<()> {
     }
 }
 // want to be able to create a new buffer without any information provided
@@ -203,8 +213,10 @@ fn get_timestamp() -> String {
 
     dt.format("%Y%m%d%H%M%S").to_string()
 
+}*/
+fn get_null_time() -> chrono::datetime::DateTime<UTC> {
+    DateTime::from_utc( NaiveDateTime::from_timestamp(0, 0), UTC::Offset )
 }
-*/
 
 // ^^^ Functions ^^^ }}}
 

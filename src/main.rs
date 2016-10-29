@@ -22,13 +22,17 @@
 //extern crate clap;
 
 mod io;
-mod parse;
+//mod parse;
 mod error;
+mod buf;
 #[cfg(test)]
 mod tests;
 
 use std::env;
-use io::FileMode;
+use std::path::Path;
+
+use buf::Buffer;
+//use io::FileMode;
 
 // }}}
 
@@ -54,23 +58,17 @@ fn main() {
     let args: Vec<String> = env::args().collect();
 
     // take as direct arg; will later be arg to flag
-    let file_name: &str = &args[0];
+    let file_name = String::from( &args[0] );
+    let file_path = Path::new( file_name );
+    let mut buffer = Buffer::new( file_name, None );
+    for line in 0 .. buffer.num_lines() {
+        println!("{}", line);
+    }
+    /*
     let file_mode = FileMode { f_read: true, ..Default::default() };
     let file_opened: File;
 
-    match file_opener( file_name, file_mode ) {
-        Ok(f) => {
-            file_opened = f;
-            println!( "{}", S_FOPEN_MSG );
-            println!( "our file is: {:?}", file_opened );
-        },
-        Err(e) => {
-            println!( "error: {}", e );
-            std::process::exit(
-                    error::error_code( error::RedError::FileOpen ) as i32 );
 
-        },
-    };
 
     //let mut file_buffer = BufReader::new(file_opened);
     //let mut file_writer = LineWriter::new(file_opened);
@@ -124,7 +122,7 @@ fn main() {
         cli_writer.flush().unwrap();
     }
     //}}}
-    
+    */
     std::process::exit(
             error::error_code( error::RedError::FileClose ) as i32 );
     

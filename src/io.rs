@@ -12,6 +12,7 @@
 // *** Bring in to namespace *** {{{
 use std::fs::{File, OpenOptions};
 use std::path::Path;
+use std::io::Error;
 
 // ^^^ Bring in to namespace ^^^ }}}
 //
@@ -19,7 +20,6 @@ use std::path::Path;
 // ^^^ Attributes ^^^ }}}
 //
 // *** Constants *** {{{
-const S_FOPEN_MSG: &'static str = "successfully opened file!";
 const LINE_CONT: &'static str = "\\\n";
 const PROMPT: &'static str = "%";
 const PROMPT_CONT: &'static str = ">";
@@ -56,7 +56,7 @@ regex_search( needle: &str, from: FileCoordinate ) -> FileCoordinate {
 ///
 /// Returns direct result of call to OpenOptions::new()
 /// This is of type Result<File, io::Error>
-pub fn file_opener( name: Path, mode: FileMode ) -> Result<File, io::Error> {
+pub fn file_opener( name: Path, mode: FileMode ) -> Result<File, Error> {
 
     // let's introduce OpenOptions now, though we don't need it
     // until we introduce more functionality
