@@ -29,9 +29,8 @@ mod buf;
 mod tests;
 
 use std::env;
-use std::path::Path;
 
-use buf::Buffer;
+use buf::{Buffer, BufferInput};
 //use io::FileMode;
 
 // }}}
@@ -58,11 +57,10 @@ fn main() {
     let args: Vec<String> = env::args().collect();
 
     // take as direct arg; will later be arg to flag
-    let file_name = String::from( &args[0] );
-    let file_path = Path::new( file_name );
-    let mut buffer = Buffer::new( file_name, None );
+    let file_name = args[1].to_string();
+    let buffer = Buffer::new( BufferInput::File( file_name ), None );
     for line in 0 .. buffer.num_lines() {
-        println!("{}", line);
+        println!("{}", buffer.get_line_content( line + 1 ).unwrap_or(""));
     }
     /*
     let file_mode = FileMode { f_read: true, ..Default::default() };

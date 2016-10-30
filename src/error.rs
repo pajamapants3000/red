@@ -15,7 +15,7 @@
 
 // *** Data Structures *** {{{
 pub enum RedError {
-    FileOpen,
+//    FileOpen,
     FileClose,
 }
 // ^^^ Data Structures ^^^ }}}
@@ -25,7 +25,7 @@ pub enum RedError {
 ///
 pub fn error_code( _error: RedError ) -> u32 {
     match _error {
-        RedError::FileOpen => 280,
+//        RedError::FileOpen => 280,
         RedError::FileClose => 281,
     }
 }

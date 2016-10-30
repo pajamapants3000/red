@@ -8,7 +8,7 @@
  * Notes  : Notes on successful compilation
  * Created: 10/26/2016
  */
-
+#![allow(dead_code)]
 // *** Bring in to namespace *** {{{
 extern crate chrono;
 
@@ -19,11 +19,12 @@ use std::fs::File;
 use std::path::Path;
 use std::collections::LinkedList;
 use std::collections::linked_list::Iter;
+use std::iter::{IntoIterator, FromIterator};
 
 use self::chrono::*;
 
 use io::*;
-use error::*;
+//use error::*;
 
 // ^^^ Bring in to namespace ^^^ }}}
 // *** Attributes *** {{{
@@ -36,8 +37,8 @@ use error::*;
 /// File - read from existing file
 /// Command - read output of specified command
 /// None - no input
-enum BufferInput {
-    File(Path),         // box it?
+pub enum BufferInput {
+    File(String),         // box it?
     Command(String),    // OsString? box it?
     None,
 }
@@ -55,9 +56,9 @@ pub struct Buffer {
     /// the optional path of file being worked on
     ///
     /// Is None if no exising file was loaded and not yet saved
-    file: Option<Path>,
+    file: Option<String>,
     /// timestamped path of file where buffer is stored regularly
-    buffer_file: Option<Path>,  // convert to Path later
+    buffer_file: Option<String>,  // convert to Path later
     /// collection of markers set for lines in lines
     markers: Vec<Marker>,
     /// line number of "cursor"
@@ -66,8 +67,6 @@ pub struct Buffer {
     current_line: usize,
     /// current total number of lines in lines
     total_lines: usize,
-    /// buffer has read in contents of working file or command output
-    is_initialized: bool,
     /// Date and time of last read of source file
     last_update: DateTime<UTC>,
     /// Date and time of last write to disk under temporary file name
@@ -76,39 +75,109 @@ pub struct Buffer {
     last_write: DateTime<UTC>,
 }
 impl Buffer {
-    pub fn new( content: BufferInput, output_file: Option<Path> ) -> Buffer {
-        let mut _lines = Buffer::get_lines( content );
+    pub fn new( content: BufferInput, output_file: Option<String> )
+            -> Buffer {
+        let mut _lines = Buffer::get_lines( &content );
         let _total_lines = _lines.len();
         Buffer {
             lines: _lines,
-            file: match content {
-                BufferInput::File(x) => Some(x),
-                _ => None,
-            },
             buffer_file: output_file,
             markers: Vec::new(),
             current_line: _total_lines,     // usize; should be Copy
             total_lines: _total_lines,
-            last_update: match content {
-                BufferInput::File(x) => DateTime::now(),
+            last_update: match &content {
+                &BufferInput::File(_) => UTC::now(),
                 _ => get_null_time(),
             },
-            last_temp_write: match content {
-                BufferInput::File(x) => DateTime::now(),
+            last_temp_write: match &content {
+                &BufferInput::File(_) => UTC::now(),
                 _ => get_null_time(),
             },
             last_write: get_null_time(),
+            file: match content {
+                BufferInput::File(x) => Some(x),
+                _ => None,
+            },
         }
     }
+    pub fn num_lines( &self ) -> usize {
+        self.total_lines
+    }
+    // later, change approach to homogenize file/stdout source
+    // generate iterator over BufRead object, either file, stdout, or empty
+    fn get_lines( content: &BufferInput ) -> LinkedList<String> {
+        let mut result: LinkedList<String>;
+        match *content {
+            BufferInput::File( ref file_name ) => {
+                let file_path = Path::new( &file_name );
+                let _file = file_path;
+                let mut file_mode = FileMode{
+                        f_read: true, ..Default::default() };
+                if !_file.exists() {
+                    file_mode.f_write = true;
+                    file_mode.f_create = true;
+                }
+                let file_opened: File;
+                match file_opener( file_name, file_mode ) {
+                    Ok( _file_opened ) => {
+                        file_opened = _file_opened;
+                    },
+                    Err(_) => {
+                        return Buffer::get_lines( &BufferInput::None );
+                    },
+                }
+                let reader = BufReader::new( file_opened );
+                // reader.lines() returns an iterator (Lines type) over
+                // io::Result<String>
+                // We map that to the String (at least that's my intention!)
+                // it seems like this happens on the iterator level, never
+                // needing to do the iteration - should be efficient
+                // (again... that's my intention!)
+                LinkedList::from_iter( reader.lines()
+                                  .map( |result| result.unwrap() ))
+            },
+            BufferInput::Command(_) => {
+                result = LinkedList::new();
+                result.push_back(
+                    "Command buffer not yet implemented, but thank you
+                    for trying!".to_string()
+                    );
+                result
+            },
+            BufferInput::None => {
+                result = LinkedList::new();
+                result.push_back( "No input provided".to_string() );
+                result
+            },
+        }
+    }
+    pub fn get_line_content( &self, line: usize ) -> Option<&str> {
+        let mut lines_iter = self.line_iterator();
+        let mut _line: usize = 1;
+        let mut result: &str = "";
+        while _line <= line {
+            match lines_iter.next() {
+                Some( content ) => {
+                    result = content;
+                },
+                None => {
+                    return None;
+                },
+            }
+            _line += 1;
+        }
+        Some(result)
+    }
+    pub fn line_iterator( &self ) -> Iter<String> {
+        let lines_ref: &LinkedList<String> = &self.lines;
+        lines_ref.into_iter()
+    }
+    /*
     pub fn get_file_name( &self ) -> String {
     }
     pub fn set_file_name( &self, file_name: &str ) -> Result<(), RedError> {
     }
-    pub fn get_line_content( &self, line: usize ) -> Result<&str, RedError> {
-    }
     pub fn set_line_content( &self, line: usize ) -> Result<&str, RedError> {
-    }
-    pub fn line_iterator( &self ) -> Iter<String> {
     }
     pub fn mut_line_iterator( &self ) -> Iter<String> {
     }
@@ -124,49 +193,9 @@ impl Buffer {
     }
     pub fn write_to_disk( &self ) -> Result<(), RedError> {
     }
-    pub fn num_lines( &self ) -> usize {
-        self.total_lines
-    }
     fn store_buffer( &self ) -> Result<(), RedError> {
     }
-    // later, change approach to homogenize file/stdout source
-    // generate iterator over BufRead object, either file, stdout, or empty
-    fn get_lines( content: BufferInput ) -> LinkedList<String> {
-        let mut result: LinkedList<String>;
-        match content {
-            BufferInput::File( file_path ) => {
-                let _file = file_path;
-                let file_mode = FileMode{ f_read: true, ..Default::default() };
-                if !_file.exists() {
-                    file_mode.f_write = true;
-                    file_mode.f_create = true;
-                }
-                let file_opened: File = try!(file_opener( _file, file_mode ) );
-                let mut reader = BufReader::new( file_opened );
-                // reader.lines() returns an iterator (Lines type) over
-                // io::Result<String>
-                // We map that to the String (at least that's my intention!)
-                // it seems like this happens on the iterator level, never
-                // needing to do the iteration - should be efficient
-                // (again... that's my intention!)
-                LinkedList::from_iter( reader.lines()
-                                  .map( |result| result.unwrap() ));
-            },
-            BufferInput::Command(command) => {
-                result = LinkedList::new();
-                result.push_back(
-                    "Command buffer not yet implemented, but thank you
-                    for trying!"
-                    );
-                result
-            },
-            BufferInput::None => {
-                result = LinkedList::new();
-                result.push_back( "No input provided" );
-                result
-            },
-        }
-    }
+    */
 }
 // want to be able to create a new buffer without any information provided
 //impl Default for Buffer {
@@ -209,13 +238,15 @@ fn get_line_offset( buffer: Buffer,  line: usize ) -> usize {
 
 /*
 fn get_timestamp() -> String {
-    let dt = chrono::Local::now();
+    let dt = UTC::now();
 
     dt.format("%Y%m%d%H%M%S").to_string()
 
 }*/
 fn get_null_time() -> chrono::datetime::DateTime<UTC> {
-    DateTime::from_utc( NaiveDateTime::from_timestamp(0, 0), UTC::Offset )
+    let utc_instance: UTC = UTC {};
+    utc_instance.timestamp( 0, 0 )
+    //NaiveDateTime::from_timestamp(0, 0)
 }
 
 // ^^^ Functions ^^^ }}}

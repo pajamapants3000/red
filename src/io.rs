@@ -11,7 +11,6 @@
 
 // *** Bring in to namespace *** {{{
 use std::fs::{File, OpenOptions};
-use std::path::Path;
 use std::io::Error;
 
 // ^^^ Bring in to namespace ^^^ }}}
@@ -20,9 +19,9 @@ use std::io::Error;
 // ^^^ Attributes ^^^ }}}
 //
 // *** Constants *** {{{
-const LINE_CONT: &'static str = "\\\n";
-const PROMPT: &'static str = "%";
-const PROMPT_CONT: &'static str = ">";
+//const LINE_CONT: &'static str = "\\\n";
+//const PROMPT: &'static str = "%";
+//const PROMPT_CONT: &'static str = ">";
 // ^^^ Constants ^^^ }}}
 //
 // *** Data Structures *** {{{
@@ -56,7 +55,7 @@ regex_search( needle: &str, from: FileCoordinate ) -> FileCoordinate {
 ///
 /// Returns direct result of call to OpenOptions::new()
 /// This is of type Result<File, io::Error>
-pub fn file_opener( name: Path, mode: FileMode ) -> Result<File, Error> {
+pub fn file_opener( name: &str, mode: FileMode ) -> Result<File, Error> {
 
     // let's introduce OpenOptions now, though we don't need it
     // until we introduce more functionality
