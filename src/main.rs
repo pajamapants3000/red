@@ -62,6 +62,17 @@ fn main() {
     for line in 0 .. buffer.num_lines() {
         println!("{}", buffer.get_line_content( line + 1 ).unwrap_or(""));
     }
+    // confirm buffer is still valid
+    let mut line_iterator = buffer.line_iterator();
+    loop {
+        match &line_iterator.next() {
+            &Some( ref line ) => {
+                println!("{}", line );
+            },
+            &None => break,
+        }
+    }
+    println!("file: {}", buffer.get_file_name().unwrap_or("nofile") );
     /*
     let file_mode = FileMode { f_read: true, ..Default::default() };
     let file_opened: File;

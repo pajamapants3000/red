@@ -29,28 +29,30 @@ use io::*;
 // ^^^ Bring in to namespace ^^^ }}}
 // *** Attributes *** {{{
 // ^^^ Attributes ^^^ }}}
+
 // *** Constants *** {{{
 // ^^^ Constants ^^^ }}}
+
 // *** Data Structures *** {{{
 /// Type of input for starting buffer
 ///
 /// File - read from existing file
 /// Command - read output of specified command
 /// None - no input
-pub enum BufferInput {
+pub enum BufferInput {// {{{
     File(String),         // box it?
     Command(String),    // OsString? box it?
     None,
-}
+}// }}}
 /// Single assignment of a marker to a line
 ///
-struct Marker {
+struct Marker {// {{{
     label: char,
     line: usize,
-}
+}// }}}
 /// Stores collection of lines containing current working text
 ///
-pub struct Buffer {
+pub struct Buffer {     //{{{
     /// the current working buffer content as a list of lines
     lines: LinkedList<String>,
     /// the optional path of file being worked on
@@ -73,9 +75,10 @@ pub struct Buffer {
     last_temp_write: DateTime<UTC>,
     /// Date and time of last write to disk under permanent file name
     last_write: DateTime<UTC>,
-}
-impl Buffer {
-    pub fn new( content: BufferInput, output_file: Option<String> )
+}   //}}}
+impl Buffer {   //{{{
+    /// Initialize new Buffer instance
+    pub fn new( content: BufferInput, output_file: Option<String> )     //{{{
             -> Buffer {
         let mut _lines = Buffer::get_lines( &content );
         let _total_lines = _lines.len();
@@ -99,13 +102,15 @@ impl Buffer {
                 _ => None,
             },
         }
-    }
-    pub fn num_lines( &self ) -> usize {
+    }   //}}}
+    /// Return total number of lines in buffer
+    pub fn num_lines( &self ) -> usize {// {{{
         self.total_lines
-    }
+    }// }}}
     // later, change approach to homogenize file/stdout source
     // generate iterator over BufRead object, either file, stdout, or empty
-    fn get_lines( content: &BufferInput ) -> LinkedList<String> {
+    /// Return the linked-list stored in buffer
+    fn get_lines( content: &BufferInput ) -> LinkedList<String> {// {{{
         let mut result: LinkedList<String>;
         match *content {
             BufferInput::File( ref file_name ) => {
@@ -150,8 +155,9 @@ impl Buffer {
                 result
             },
         }
-    }
-    pub fn get_line_content( &self, line: usize ) -> Option<&str> {
+    }// }}}
+    /// Return single line
+    pub fn get_line_content( &self, line: usize ) -> Option<&str> {// {{{
         let mut lines_iter = self.line_iterator();
         let mut _line: usize = 1;
         let mut result: &str = "";
@@ -167,16 +173,26 @@ impl Buffer {
             _line += 1;
         }
         Some(result)
-    }
-    pub fn line_iterator( &self ) -> Iter<String> {
+    }// }}}
+    /// Return iterator over lines in buffer
+    pub fn line_iterator( &self ) -> Iter<String> {// {{{
         let lines_ref: &LinkedList<String> = &self.lines;
         lines_ref.into_iter()
+    }// }}}
+    /// Return reference to working file name string
+    pub fn get_file_name( &self ) -> Option<&str> {// {{{
+        match &self.file {
+            &Some( ref file_name ) => Some( &file_name ),
+            &None => None,
+        }
+    }// }}}
+    /// Set new working file name
+    ///
+    /// At some point, need to test for existing file and ask user if overwrite
+    pub fn set_file_name( &mut self, file_name: &str ) -> Result<(), RedError> {
+        self.file = Some(file_name.to_string());
     }
     /*
-    pub fn get_file_name( &self ) -> String {
-    }
-    pub fn set_file_name( &self, file_name: &str ) -> Result<(), RedError> {
-    }
     pub fn set_line_content( &self, line: usize ) -> Result<&str, RedError> {
     }
     pub fn mut_line_iterator( &self ) -> Iter<String> {
@@ -196,7 +212,7 @@ impl Buffer {
     fn store_buffer( &self ) -> Result<(), RedError> {
     }
     */
-}
+}   //}}}
 // want to be able to create a new buffer without any information provided
 //impl Default for Buffer {
 //}
