@@ -17,6 +17,7 @@
 pub enum RedError {
 //    FileOpen,
     FileClose,
+//    SetLineOutOfBounds,
 }
 // ^^^ Data Structures ^^^ }}}
 
@@ -27,6 +28,7 @@ pub fn error_code( _error: RedError ) -> u32 {
     match _error {
 //        RedError::FileOpen => 280,
         RedError::FileClose => 281,
+//        RedError::SetLineOutOfBounds => 290,
     }
 }
 //}}}

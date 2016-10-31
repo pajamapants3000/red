@@ -18,7 +18,7 @@ use std::io::BufReader;
 use std::fs::File;
 use std::path::Path;
 use std::collections::LinkedList;
-use std::collections::linked_list::Iter;
+use std::collections::linked_list::{Iter, IterMut};
 use std::iter::{IntoIterator, FromIterator};
 
 use self::chrono::*;
@@ -80,7 +80,7 @@ impl Buffer {   //{{{
     /// Initialize new Buffer instance
     pub fn new( content: BufferInput, output_file: Option<String> )     //{{{
             -> Buffer {
-        let mut _lines = Buffer::get_lines( &content );
+        let mut _lines = Buffer::init_lines( &content );
         let _total_lines = _lines.len();
         Buffer {
             lines: _lines,
@@ -109,18 +109,16 @@ impl Buffer {   //{{{
     }// }}}
     // later, change approach to homogenize file/stdout source
     // generate iterator over BufRead object, either file, stdout, or empty
-    /// Return the linked-list stored in buffer
-    fn get_lines( content: &BufferInput ) -> LinkedList<String> {// {{{
+    /// Return the linked-list of lines to store in buffer
+    fn init_lines( content: &BufferInput ) -> LinkedList<String> {// {{{
         let mut result: LinkedList<String>;
         match *content {
             BufferInput::File( ref file_name ) => {
                 let file_path = Path::new( &file_name );
                 let _file = file_path;
-                let mut file_mode = FileMode{
-                        f_read: true, ..Default::default() };
+                let file_mode = FileMode{ f_read: true, ..Default::default() };
                 if !_file.exists() {
-                    file_mode.f_write = true;
-                    file_mode.f_create = true;
+                    return Buffer::init_lines( &BufferInput::None );
                 }
                 let file_opened: File;
                 match file_opener( file_name, file_mode ) {
@@ -128,7 +126,7 @@ impl Buffer {   //{{{
                         file_opened = _file_opened;
                     },
                     Err(_) => {
-                        return Buffer::get_lines( &BufferInput::None );
+                        return Buffer::init_lines( &BufferInput::None );
                     },
                 }
                 let reader = BufReader::new( file_opened );
@@ -157,6 +155,8 @@ impl Buffer {   //{{{
         }
     }// }}}
     /// Return single line
+    ///
+    /// change to Result instead of Option?
     pub fn get_line_content( &self, line: usize ) -> Option<&str> {// {{{
         let mut lines_iter = self.line_iterator();
         let mut _line: usize = 1;
@@ -164,7 +164,9 @@ impl Buffer {   //{{{
         while _line <= line {
             match lines_iter.next() {
                 Some( content ) => {
-                    result = content;
+                    if _line == line {
+                        result = content;
+                    }
                 },
                 None => {
                     return None;
@@ -189,14 +191,24 @@ impl Buffer {   //{{{
     /// Set new working file name
     ///
     /// At some point, need to test for existing file and ask user if overwrite
-    pub fn set_file_name( &mut self, file_name: &str ) -> Result<(), RedError> {
+    pub fn set_file_name( &mut self, file_name: &str ) {// {{{
         self.file = Some(file_name.to_string());
-    }
+    }// }}}
+    /// Replace line with new string
+    ///
+    /// TODO: Add error handling; panics if line > len
+    pub fn set_line_content( &mut self, line: usize, new_line: String ) {// {{{
+        let mut back_list = self.lines.split_off( line - 1 );
+        let _ = back_list.pop_front();
+        self.lines.push_back( new_line );
+        self.lines.append( &mut back_list );
+    }// }}}
+    /// Return mutable iterator over lines in buffer
+    pub fn mut_line_iterator( &mut self ) -> IterMut<String> {// {{{
+        let mut lines_ref: &mut LinkedList<String> = &mut self.lines;
+        lines_ref.into_iter()
+    }// }}}
     /*
-    pub fn set_line_content( &self, line: usize ) -> Result<&str, RedError> {
-    }
-    pub fn mut_line_iterator( &self ) -> Iter<String> {
-    }
     pub fn get_current_line_number( &self ) -> usize {
     }
     pub fn does_line_match_regex( &self, line: usize, regex: &str ) -> bool {
