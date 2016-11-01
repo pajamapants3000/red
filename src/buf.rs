@@ -14,8 +14,8 @@ extern crate chrono;
 
 // Use LineWriter instead of, or in addition to, BufWriter?
 use std::io::prelude::*;
-use std::io::BufReader;
-use std::fs::File;
+use std::io::{BufReader, BufWriter, Error};
+use std::fs::{File, copy, rename};
 use std::path::Path;
 use std::collections::LinkedList;
 use std::collections::linked_list::{Iter, IterMut};
@@ -46,7 +46,7 @@ pub enum BufferInput {// {{{
 }// }}}
 /// Single assignment of a marker to a line
 ///
-struct Marker {// {{{
+pub struct Marker {// {{{
     label: char,
     line: usize,
 }// }}}
@@ -60,7 +60,7 @@ pub struct Buffer {     //{{{
     /// Is None if no exising file was loaded and not yet saved
     file: Option<String>,
     /// timestamped path of file where buffer is stored regularly
-    buffer_file: Option<String>,  // convert to Path later
+    buffer_file: String,  // convert to Path later
     /// collection of markers set for lines in lines
     markers: Vec<Marker>,
     /// line number of "cursor"
@@ -78,13 +78,17 @@ pub struct Buffer {     //{{{
 }   //}}}
 impl Buffer {   //{{{
     /// Initialize new Buffer instance
-    pub fn new( content: BufferInput, output_file: Option<String> )     //{{{
+    pub fn new( content: BufferInput )     //{{{
             -> Buffer {
         let mut _lines = Buffer::init_lines( &content );
         let _total_lines = _lines.len();
         Buffer {
             lines: _lines,
-            buffer_file: output_file,
+            buffer_file: match &content {
+                &BufferInput::File( ref file_name ) =>
+                    temp_file_name( Some( file_name.as_str() ) ),
+                _ => temp_file_name( None ),
+            },
             markers: Vec::new(),
             current_line: _total_lines,     // usize; should be Copy
             total_lines: _total_lines,
@@ -98,7 +102,7 @@ impl Buffer {   //{{{
             },
             last_write: get_null_time(),
             file: match content {
-                BufferInput::File(x) => Some(x),
+                BufferInput::File( file_name ) => Some( file_name ),
                 _ => None,
             },
         }
@@ -208,20 +212,80 @@ impl Buffer {   //{{{
         let mut lines_ref: &mut LinkedList<String> = &mut self.lines;
         lines_ref.into_iter()
     }// }}}
-    /*
     pub fn get_current_line_number( &self ) -> usize {
+        self.current_line
     }
+    pub fn get_marked_line( &self, label: char ) -> Option<usize> {
+        for i in 0 .. self.markers.len() {
+            if self.markers[i].label == label {
+                return Some( self.markers[i].line );
+            }
+        }
+        None
+    }
+    /// Add new line marker
+    ///
+    /// TODO: need exception handling? What can happen? Just out of space I think
+    pub fn set_marker( &mut self, _line: usize, _label: char ) {
+        self.markers.push( Marker{ label: _label, line: _line } );
+    }
+    /// Return immutable slice over all markers
+    pub fn list_markers( &self ) -> &[ Marker ] {
+        self.markers.as_slice()
+    }
+    /// Return mutable slice over all markers
+    pub fn list_markers_mut( &mut self ) -> &mut [ Marker ] {
+        self.markers.as_mut_slice()
+    }
+    /// Write buffer contents to temp file
+    ///
+    /// TODO: Delete on buffer destruct
+    fn store_buffer( &mut self ) -> Result<(), Error> {
+        let file_mode = FileMode { f_write: true, f_create: true,
+                ..Default::default() };
+        let temp_file_opened = try!( file_opener(
+                &self.buffer_file, file_mode ) );
+        let mut writer = BufWriter::new( temp_file_opened );
+        {
+            let mut _line_iterator = self.line_iterator();
+            loop {
+                match _line_iterator.next() {
+                    Some(x) => {
+                        writer.write( x.as_bytes() )
+                                .expect( "failed to write to disk" );
+                    },
+                    None => break,
+                }
+                writer.write( b"\n" ).expect( "failed to write to disk" );
+            }
+        }
+        writer.flush().expect( "failed to write to disk" );
+        let new_buffer_file = match &self.file {
+            &Some(ref x) => temp_file_name( Some( x.as_str() ) ),
+            &None => temp_file_name( None ),
+        };
+        try!( rename( &self.buffer_file, &new_buffer_file ) );
+        self.buffer_file = new_buffer_file;
+        Ok( () )
+    }
+    /// Save work to permanent file
+    ///
+    /// move to io.rs?
+    pub fn write_to_disk( &mut self ) -> Result<(), Error> {
+        self.store_buffer().expect( "failed to write to disk" );
+        match &self.file {
+            &Some(ref x) => {
+                try!( copy( &self.buffer_file, x ) );
+            },
+            &None => {
+                println!("No file name chosen for save");
+            },
+        }
+        Ok( () )
+    }
+    /*
+    // this one is going to be some work, probably do it last/later
     pub fn does_line_match_regex( &self, line: usize, regex: &str ) -> bool {
-    }
-    pub fn get_marker( &self, label: char ) -> Option<usize> {
-    }
-    pub fn set_marker( &self, line: usize, label: char ) -> Result<(), RedError> {
-    }
-    pub fn list_markers( &self ) -> Vec<(char, usize)> {
-    }
-    pub fn write_to_disk( &self ) -> Result<(), RedError> {
-    }
-    fn store_buffer( &self ) -> Result<(), RedError> {
     }
     */
 }   //}}}
@@ -264,17 +328,33 @@ fn get_line_offset( buffer: Buffer,  line: usize ) -> usize {
 
 */ //DELETE?
 
-/*
 fn get_timestamp() -> String {
     let dt = UTC::now();
 
     dt.format("%Y%m%d%H%M%S").to_string()
 
-}*/
+}
 fn get_null_time() -> chrono::datetime::DateTime<UTC> {
     let utc_instance: UTC = UTC {};
     utc_instance.timestamp( 0, 0 )
     //NaiveDateTime::from_timestamp(0, 0)
+}
+
+fn temp_file_name( file_name: Option<&str> ) -> String {
+    /*
+    let result: String = ".red.";
+    match file_name {
+        Some(x) => result = x + ".",
+        None => {},
+    }
+    result += get_timestamp();
+    result
+    */
+    match file_name {
+        Some(x) => ".red.".to_string() + x +
+                "." + &get_timestamp(),
+        None => ".red.".to_string() + &get_timestamp(),
+    }
 }
 
 // ^^^ Functions ^^^ }}}

@@ -58,7 +58,7 @@ fn main() {
 
     // take as direct arg; will later be arg to flag
     let file_name = args[1].to_string();
-    let mut buffer = Buffer::new( BufferInput::File( file_name ), None );
+    let mut buffer = Buffer::new( BufferInput::File( file_name ) );
     for line in 0 .. buffer.num_lines() {
         println!("{}", buffer.get_line_content( line + 1 ).unwrap_or(""));
     }
@@ -93,6 +93,8 @@ fn main() {
     for line in 0 .. buffer.num_lines() {
         println!("{}", buffer.get_line_content( line + 1 ).unwrap_or(""));
     }
+    buffer.write_to_disk().expect("unable to save file");
+
     /*
     let file_mode = FileMode { f_read: true, ..Default::default() };
     let file_opened: File;
