@@ -10,7 +10,6 @@
  */
 #![allow(dead_code)]
 // *** Bring in to namespace *** {{{
-extern crate chrono;
 
 // Use LineWriter instead of, or in addition to, BufWriter?
 use std::io::prelude::*;
@@ -21,10 +20,11 @@ use std::collections::LinkedList;
 use std::collections::linked_list::{Iter, IterMut};
 use std::iter::{IntoIterator, FromIterator};
 
-use self::chrono::*;
+use ::chrono::*;
+use ::regex::Regex;
 
 use io::*;
-//use error::*;
+use error::*;
 
 // ^^^ Bring in to namespace ^^^ }}}
 // *** Attributes *** {{{
@@ -140,8 +140,6 @@ impl Buffer {   //{{{
                 // it seems like this happens on the iterator level, never
                 // needing to do the iteration - should be efficient
                 // (again... that's my intention!)
-                LinkedList::from_iter( reader.lines()
-                                  .map( |result| result.unwrap() ))
             },
             BufferInput::Command(_) => {
                 result = LinkedList::new();
@@ -156,13 +154,15 @@ impl Buffer {   //{{{
                 result.push_back( "No input provided".to_string() );
                 result
             },
+                LinkedList::from_iter( reader.lines()
+                                  .map( |result| result.unwrap() ))
         }
     }// }}}
     /// Return single line
     ///
     /// change to Result instead of Option?
     pub fn get_line_content( &self, line: usize ) -> Option<&str> {// {{{
-        let mut lines_iter = self.line_iterator();
+        let mut lines_iter = self.lines_iterator();
         let mut _line: usize = 1;
         let mut result: &str = "";
         while _line <= line {
@@ -181,7 +181,7 @@ impl Buffer {   //{{{
         Some(result)
     }// }}}
     /// Return iterator over lines in buffer
-    pub fn line_iterator( &self ) -> Iter<String> {// {{{
+    pub fn lines_iterator( &self ) -> Iter<String> {// {{{
         let lines_ref: &LinkedList<String> = &self.lines;
         lines_ref.into_iter()
     }// }}}
@@ -200,56 +200,61 @@ impl Buffer {   //{{{
     }// }}}
     /// Replace line with new string
     ///
-    /// TODO: Add error handling; panics if line > len
-    pub fn set_line_content( &mut self, line: usize, new_line: String ) {// {{{
-        let mut back_list = self.lines.split_off( line - 1 );
+    /// TODO: Add error handling; panics if line_num > len
+    pub fn set_line_content( &mut self, line_num: usize, new_line: String )// {{{
+            -> Result<(), RedError> {
+        if line_num > self.lines.len() {
+            return Err(RedError::SetLineOutOfBounds);
+        }
+        let mut back_list = self.lines.split_off( line_num - 1 );
         let _ = back_list.pop_front();
         self.lines.push_back( new_line );
         self.lines.append( &mut back_list );
+        Ok( () )
     }// }}}
     /// Return mutable iterator over lines in buffer
-    pub fn mut_line_iterator( &mut self ) -> IterMut<String> {// {{{
+    pub fn mut_lines_iterator( &mut self ) -> IterMut<String> {// {{{
         let mut lines_ref: &mut LinkedList<String> = &mut self.lines;
         lines_ref.into_iter()
     }// }}}
-    pub fn get_current_line_number( &self ) -> usize {
+    pub fn get_current_line_number( &self ) -> usize {// {{{
         self.current_line
-    }
-    pub fn get_marked_line( &self, label: char ) -> Option<usize> {
+    }// }}}
+    pub fn get_marked_line( &self, label: char ) -> Option<usize> {// {{{
         for i in 0 .. self.markers.len() {
             if self.markers[i].label == label {
                 return Some( self.markers[i].line );
             }
         }
         None
-    }
+    }// }}}
     /// Add new line marker
     ///
     /// TODO: need exception handling? What can happen? Just out of space I think
-    pub fn set_marker( &mut self, _line: usize, _label: char ) {
+    pub fn set_marker( &mut self, _line: usize, _label: char ) {// {{{
         self.markers.push( Marker{ label: _label, line: _line } );
-    }
+    }// }}}
     /// Return immutable slice over all markers
-    pub fn list_markers( &self ) -> &[ Marker ] {
+    pub fn list_markers( &self ) -> &[ Marker ] {// {{{
         self.markers.as_slice()
-    }
+    }// }}}
     /// Return mutable slice over all markers
-    pub fn list_markers_mut( &mut self ) -> &mut [ Marker ] {
+    pub fn list_markers_mut( &mut self ) -> &mut [ Marker ] {// {{{
         self.markers.as_mut_slice()
-    }
+    }// }}}
     /// Write buffer contents to temp file
     ///
     /// TODO: Delete on buffer destruct
-    fn store_buffer( &mut self ) -> Result<(), Error> {
+    fn store_buffer( &mut self ) -> Result<(), RedError> {// {{{
         let file_mode = FileMode { f_write: true, f_create: true,
                 ..Default::default() };
         let temp_file_opened = try!( file_opener(
                 &self.buffer_file, file_mode ) );
         let mut writer = BufWriter::new( temp_file_opened );
         {
-            let mut _line_iterator = self.line_iterator();
+            let mut _lines_iterator = self.lines_iterator();
             loop {
-                match _line_iterator.next() {
+                match _lines_iterator.next() {
                     Some(x) => {
                         writer.write( x.as_bytes() )
                                 .expect( "failed to write to disk" );
@@ -264,14 +269,16 @@ impl Buffer {   //{{{
             &Some(ref x) => temp_file_name( Some( x.as_str() ) ),
             &None => temp_file_name( None ),
         };
-        try!( rename( &self.buffer_file, &new_buffer_file ) );
+        try!( rename( &self.buffer_file, &new_buffer_file )
+              .map_err(|err| RedError::FileRename( err ) )
+            );
         self.buffer_file = new_buffer_file;
         Ok( () )
-    }
+    }// }}}
     /// Save work to permanent file
     ///
     /// move to io.rs?
-    pub fn write_to_disk( &mut self ) -> Result<(), Error> {
+    pub fn write_to_disk( &mut self ) -> Result<(), Error> {// {{{
         self.store_buffer().expect( "failed to write to disk" );
         match &self.file {
             &Some(ref x) => {
@@ -282,80 +289,68 @@ impl Buffer {   //{{{
             },
         }
         Ok( () )
-    }
-    /*
-    // this one is going to be some work, probably do it last/later
-    pub fn does_line_match_regex( &self, line: usize, regex: &str ) -> bool {
-    }
-    */
+    }// }}}
+    /// Determine whether line matches regex
+    ///
+    /// Do NOT use for search over multiple lines - will be very inefficient!
+    /// Use find_match instead
+    pub fn does_line_match( &self, line: usize, regex: &str ) -> bool {// {{{
+        let re = Regex::new( regex ).unwrap();
+        let haystack = self.get_line_content( line );
+        match haystack {
+            Some( line ) => re.is_match( line ),
+            None => false
+        }
+    }// }}}
+    /// Return number of next matching line
+    pub fn find_match( &self, regex: &str ) -> Option<usize> {// {{{
+        let re = Regex::new( regex ).unwrap();
+        let mut lines_iter = self.lines_iterator();
+        for _ in 0 .. self.current_line {
+            lines_iter.next();
+        }
+        let mut index: usize = self.current_line;
+        loop {
+            match lines_iter.next() {
+                Some( line ) => {
+                    if re.is_match( line.as_str() ) {
+                        return Some( index );
+                    }
+                },
+                None => return None,
+            }
+            index += 1;
+        }
+        // not reached
+    }// }}}
 }   //}}}
-// want to be able to create a new buffer without any information provided
-//impl Default for Buffer {
-//}
 
 // ^^^ Data Structures ^^^ }}}
 
 // *** Functions *** {{{
 
-/* DELETE?
-/// Read stream or file into buffer and return buffer
-///
-/// Buffer cursor on last line
-///
-read_into_buffer<T: Read>( buffer: Buffer, content: <T> ) -> Buffer {
-    let mut _content: Vec<u8> = Vec::new();
-    // TODO: error-checking
-    content.read_to_end( &mut _content );
-    buffer.BufWriter( _content );
-}
-
-/// Open buffer file for buffered read/write
-///
-/// May take file to copy into buffer, else creates empty buffer
-///
-init_buffer( file_opened: Option<File> ) -> Buffer {
-    match file_opened {
-        Some(x) => {            // opening existing file to edit
-        },
-        None => {               // new file or buffer to collect some output
-        }
-    }
-}
-
-fn get_line_offset( buffer: Buffer,  line: usize ) -> usize {
-    let current_position: usize = buffer.reader( 
-}
-
-*/ //DELETE?
-
-fn get_timestamp() -> String {
+/// Get timestamp to use for buffer filename
+fn get_timestamp() -> String {// {{{
     let dt = UTC::now();
 
     dt.format("%Y%m%d%H%M%S").to_string()
 
-}
-fn get_null_time() -> chrono::datetime::DateTime<UTC> {
+}// }}}
+
+/// Get DateTime to use as Null value
+fn get_null_time() -> datetime::DateTime<UTC> {// {{{
     let utc_instance: UTC = UTC {};
     utc_instance.timestamp( 0, 0 )
-    //NaiveDateTime::from_timestamp(0, 0)
-}
+}// }}}
 
-fn temp_file_name( file_name: Option<&str> ) -> String {
-    /*
-    let result: String = ".red.";
-    match file_name {
-        Some(x) => result = x + ".",
-        None => {},
-    }
-    result += get_timestamp();
-    result
-    */
+/// Produce name for temporary buffer storage
+fn temp_file_name( file_name: Option<&str> ) -> String {// {{{
     match file_name {
         Some(x) => ".red.".to_string() + x +
                 "." + &get_timestamp(),
         None => ".red.".to_string() + &get_timestamp(),
     }
-}
+}// }}}
 
 // ^^^ Functions ^^^ }}}
 

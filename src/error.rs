@@ -10,14 +10,16 @@
  */
 
 // Bring in to namespace {{{
-
+use std::io;
 // }}}
 
 // *** Data Structures *** {{{
+#[derive(Debug)]
 pub enum RedError {
-//    FileOpen,
-    FileClose,
-//    SetLineOutOfBounds,
+    FileOpen(io::Error),
+    FileRename(io::Error),
+//    FileClose(io::Error),
+    SetLineOutOfBounds,
 }
 // ^^^ Data Structures ^^^ }}}
 
@@ -26,9 +28,10 @@ pub enum RedError {
 ///
 pub fn error_code( _error: RedError ) -> u32 {
     match _error {
-//        RedError::FileOpen => 280,
-        RedError::FileClose => 281,
-//        RedError::SetLineOutOfBounds => 290,
+        RedError::FileOpen(_) => 280,
+        RedError::FileRename(_) => 281,
+//        RedError::FileClose(_) => 282,
+        RedError::SetLineOutOfBounds => 290,
     }
 }
 //}}}

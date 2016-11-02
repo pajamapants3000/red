@@ -20,6 +20,8 @@
 
 // Bring in to namespace {{{
 //extern crate clap;
+extern crate chrono;
+extern crate regex;
 
 mod io;
 //mod parse;
@@ -64,9 +66,9 @@ fn main() {
     }
     // confirm buffer is still valid
     {
-        let mut line_iterator = buffer.line_iterator();
+        let mut lines_iterator = buffer.lines_iterator();
         loop {
-            match &line_iterator.next() {
+            match &lines_iterator.next() {
                 &Some( ref line ) => {
                     println!("{}", line );
                 },
@@ -84,7 +86,7 @@ fn main() {
         let mut _line_2 = buffer.get_line_content( 2 ).unwrap_or("missing");
         println!("line 2: {}", _line_2);
     }
-    buffer.set_line_content( 2, "this is the new line".to_string() );
+    buffer.set_line_content( 2, "this is the new line".to_string() ).unwrap();
     {
         let mut _line_2 = buffer.get_line_content( 2 ).unwrap_or("missing");
         println!("new line 2: {}", _line_2 );
@@ -154,8 +156,8 @@ fn main() {
     }
     //}}}
     */
-    std::process::exit(
-            error::error_code( error::RedError::FileClose ) as i32 );
+    std::process::exit( error::error_code(
+            error::RedError::SetLineOutOfBounds ) as i32);
     
 }
 //}}}

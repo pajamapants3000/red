@@ -5,5 +5,5 @@ authors = ["Tommy Lincoln <pajamapants3000@gmail.com>"]
 
 [dependencies]
 chrono = "0.2"
-
+regex = "0.1"
 
