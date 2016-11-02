@@ -18,7 +18,8 @@ use std::fs::{File, copy, rename};
 use std::path::Path;
 use std::collections::LinkedList;
 use std::collections::linked_list::{Iter, IterMut};
-use std::iter::{IntoIterator, FromIterator};
+use std::iter::{IntoIterator, FromIterator, Iterator};
+use std::str::Lines;
 
 use ::chrono::*;
 use ::regex::Regex;
@@ -134,6 +135,8 @@ impl Buffer {   //{{{
                     },
                 }
                 let reader = BufReader::new( file_opened );
+                LinkedList::from_iter( reader.lines()
+                                             .map(|result| result.unwrap() ) )
                 // reader.lines() returns an iterator (Lines type) over
                 // io::Result<String>
                 // We map that to the String (at least that's my intention!)
@@ -141,21 +144,14 @@ impl Buffer {   //{{{
                 // needing to do the iteration - should be efficient
                 // (again... that's my intention!)
             },
-            BufferInput::Command(_) => {
-                result = LinkedList::new();
-                result.push_back(
-                    "Command buffer not yet implemented, but thank you
-                    for trying!".to_string()
-                    );
-                result
+            BufferInput::Command(ref command) => {
+                LinkedList::from_iter( command_output_lines( command )
+                                         .map(|x| x.to_string() ) )
             },
             BufferInput::None => {
-                result = LinkedList::new();
-                result.push_back( "No input provided".to_string() );
-                result
+                LinkedList::from_iter( "".to_string().lines()
+                                         .map(|x| x.to_string() ) )
             },
-                LinkedList::from_iter( reader.lines()
-                                  .map( |result| result.unwrap() ))
         }
     }// }}}
     /// Return single line

@@ -13,6 +13,7 @@
 use std::fs::{File, OpenOptions};
 use std::io::Lines;
 use std::process::{Command, Output};
+use std::str::Lines as str_Lines;
 
 use error::*;
 
@@ -73,7 +74,9 @@ pub fn file_opener( name: &str, mode: FileMode ) -> Result<File, RedError> {
 }
 //}}}
 
-pub fn command_output_lines( command: &str ) -> Lines {
+// box it? we are executing the command and trying to pass back it's result
+// all starts here but it has to reach back to caller!
+pub fn command_output_lines( command: &str ) -> str_Lines {
     let output = Command::new( command )
                          .output()
                          .expect("command failed");
@@ -81,7 +84,8 @@ pub fn command_output_lines( command: &str ) -> Lines {
     // convert to RedError type
     let output_string = String::from_utf8( output_stdout )
                         .expect("Failed to get output");
-    output_string.lines()
+    let result = output_string.lines();
+    result
 }
 // ^^^ Functions ^^^ }}}
 
