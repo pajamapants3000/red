@@ -11,9 +11,7 @@
 
 // *** Bring in to namespace *** {{{
 use std::fs::{File, OpenOptions};
-use std::io::Lines;
-use std::process::{Command, Output};
-use std::str::Lines as str_Lines;
+use std::process::{Command};
 
 use error::*;
 
@@ -76,16 +74,30 @@ pub fn file_opener( name: &str, mode: FileMode ) -> Result<File, RedError> {
 
 // box it? we are executing the command and trying to pass back it's result
 // all starts here but it has to reach back to caller!
-pub fn command_output_lines( command: &str ) -> str_Lines {
-    let output = Command::new( command )
-                         .output()
-                         .expect("command failed");
+pub fn command_output( _full_stdin: &str ) -> String {
+    let first_space = _full_stdin.find( char::is_whitespace );
+    let command: &str;
+    let arguments: &str;
+    match first_space {
+        Some(x) => {
+            match _full_stdin.split_at( x ) {
+                (zi, zf) => {
+                    command = zi;
+                    arguments = zf;
+                },
+            }
+        },
+        None => {
+            command = _full_stdin;
+            arguments = "";
+        },
+    }
+    let output = Command::new( command ).arg( arguments ).output()
+                        .expect("command failed");
     let output_stdout = output.stdout;
     // convert to RedError type
-    let output_string = String::from_utf8( output_stdout )
-                        .expect("Failed to get output");
-    let result = output_string.lines();
-    result
+    String::from_utf8( output_stdout )
+                        .expect("Failed to get output")
 }
 // ^^^ Functions ^^^ }}}
 

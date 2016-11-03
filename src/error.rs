@@ -18,6 +18,8 @@ use std::io;
 pub enum RedError {
     FileOpen(io::Error),
     FileRename(io::Error),
+    FileWrite(io::Error),
+    FileRemove(io::Error),
 //    FileClose(io::Error),
     SetLineOutOfBounds,
 }
@@ -30,7 +32,9 @@ pub fn error_code( _error: RedError ) -> u32 {
     match _error {
         RedError::FileOpen(_) => 280,
         RedError::FileRename(_) => 281,
-//        RedError::FileClose(_) => 282,
+        RedError::FileWrite(_) => 282,
+        RedError::FileRemove(_) => 283,
+//        RedError::FileClose(_) => 284,
         RedError::SetLineOutOfBounds => 290,
     }
 }

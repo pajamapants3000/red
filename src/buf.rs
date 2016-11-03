@@ -13,13 +13,12 @@
 
 // Use LineWriter instead of, or in addition to, BufWriter?
 use std::io::prelude::*;
-use std::io::{BufReader, BufWriter, Error};
-use std::fs::{File, copy, rename};
+use std::io::{BufReader, BufWriter, Error, stdin};
+use std::fs::{self, File, copy, rename};
 use std::path::Path;
 use std::collections::LinkedList;
 use std::collections::linked_list::{Iter, IterMut};
 use std::iter::{IntoIterator, FromIterator, Iterator};
-use std::str::Lines;
 
 use ::chrono::*;
 use ::regex::Regex;
@@ -51,6 +50,11 @@ pub struct Marker {// {{{
     label: char,
     line: usize,
 }// }}}
+/// Specific line, character index in buffer
+pub struct Cursor {// {{{
+    line: Option<usize>,
+    indx: Option<usize>,
+}// }}}
 /// Stores collection of lines containing current working text
 ///
 pub struct Buffer {     //{{{
@@ -70,6 +74,8 @@ pub struct Buffer {     //{{{
     current_line: usize,
     /// current total number of lines in lines
     total_lines: usize,
+    /// true if file has been modified since last write
+    _is_modified: bool,
     /// Date and time of last read of source file
     last_update: DateTime<UTC>,
     /// Date and time of last write to disk under temporary file name
@@ -83,7 +89,7 @@ impl Buffer {   //{{{
             -> Buffer {
         let mut _lines = Buffer::init_lines( &content );
         let _total_lines = _lines.len();
-        Buffer {
+        let mut result = Buffer {
             lines: _lines,
             buffer_file: match &content {
                 &BufferInput::File( ref file_name ) =>
@@ -93,6 +99,7 @@ impl Buffer {   //{{{
             markers: Vec::new(),
             current_line: _total_lines,     // usize; should be Copy
             total_lines: _total_lines,
+            _is_modified: false,
             last_update: match &content {
                 &BufferInput::File(_) => UTC::now(),
                 _ => get_null_time(),
@@ -106,17 +113,28 @@ impl Buffer {   //{{{
                 BufferInput::File( file_name ) => Some( file_name ),
                 _ => None,
             },
+        };
+        // TODO: ?
+        match result.store_buffer() {
+            Ok(_) => {},
+            Err(_) => {
+                println!("Unable to store buffer");
+            },
         }
+        result
     }   //}}}
     /// Return total number of lines in buffer
     pub fn num_lines( &self ) -> usize {// {{{
         self.total_lines
     }// }}}
+    /// Return true if buffer modified since last write
+    pub fn is_modified( &self ) -> bool {
+        self._is_modified
+    }
     // later, change approach to homogenize file/stdout source
     // generate iterator over BufRead object, either file, stdout, or empty
     /// Return the linked-list of lines to store in buffer
     fn init_lines( content: &BufferInput ) -> LinkedList<String> {// {{{
-        let mut result: LinkedList<String>;
         match *content {
             BufferInput::File( ref file_name ) => {
                 let file_path = Path::new( &file_name );
@@ -145,7 +163,7 @@ impl Buffer {   //{{{
                 // (again... that's my intention!)
             },
             BufferInput::Command(ref command) => {
-                LinkedList::from_iter( command_output_lines( command )
+                LinkedList::from_iter( command_output( command ).lines()
                                          .map(|x| x.to_string() ) )
             },
             BufferInput::None => {
@@ -240,8 +258,8 @@ impl Buffer {   //{{{
     }// }}}
     /// Write buffer contents to temp file
     ///
-    /// TODO: Delete on buffer destruct
-    fn store_buffer( &mut self ) -> Result<(), RedError> {// {{{
+    /// TODO: Delete on buffer destruct or at least on program exit
+    pub fn store_buffer( &mut self ) -> Result<(), RedError> {// {{{
         let file_mode = FileMode { f_write: true, f_create: true,
                 ..Default::default() };
         let temp_file_opened = try!( file_opener(
@@ -273,7 +291,9 @@ impl Buffer {   //{{{
     }// }}}
     /// Save work to permanent file
     ///
-    /// move to io.rs?
+    /// TODO: move to io.rs? I don't think so, it's a part of the
+    /// functionality of the buffer
+    /// TODO: set up default filename?
     pub fn write_to_disk( &mut self ) -> Result<(), Error> {// {{{
         self.store_buffer().expect( "failed to write to disk" );
         match &self.file {
@@ -291,7 +311,7 @@ impl Buffer {   //{{{
     /// Do NOT use for search over multiple lines - will be very inefficient!
     /// Use find_match instead
     pub fn does_line_match( &self, line: usize, regex: &str ) -> bool {// {{{
-        let re = Regex::new( regex ).unwrap();
+        let re: Regex = Regex::new( regex ).unwrap();
         let haystack = self.get_line_content( line );
         match haystack {
             Some( line ) => re.is_match( line ),
@@ -318,6 +338,27 @@ impl Buffer {   //{{{
             index += 1;
         }
         // not reached
+    }// }}}
+    /// Deconstruct buffer
+    pub fn destruct( &mut self ) -> Result<(), RedError> {// {{{
+        let _stdin = stdin();
+        if self.is_modified() {
+            println!("Write file before closing?\n>");
+            let mut _stdin_handle = _stdin.lock();
+            let mut response: String = "".to_string();
+            _stdin_handle.read_to_string( &mut response )
+                .expect("Failed to read user input");
+            match response.to_lowercase().as_str() {
+                "y" | "yes" => { try!( self.write_to_disk()
+                                  .map_err(|err| RedError::FileWrite( err ) )
+                                  ); },
+                _ => (),
+            };
+        }
+        fs::remove_file( &self.buffer_file )
+            .expect("Failed to delete buffer file");
+        self.lines.clear();
+        Ok( () )
     }// }}}
 }   //}}}
 
@@ -349,4 +390,107 @@ fn temp_file_name( file_name: Option<&str> ) -> String {// {{{
 }// }}}
 
 // ^^^ Functions ^^^ }}}
+
+#[cfg(test)]
+mod tests {
+    use std::process::Command;
+    use std::fs;
+    use std::io::Write;
+    use std::default::Default;
+
+    use super::*;
+    use error::*;
+    use io::*;
+
+    static TEST_FILE: &'static str = "red_filetest";
+    static FILE_CONTENT: &'static str = r#"testfile1\ntestfile2\ntestfile3\n"#;
+    static COMMAND_CONTENT: &'static str = "testcmd1\ntestcmd2\ntestcmd3\n";
+
+    fn open_file_buffer_test( test_num: u8 ) -> Buffer {
+        // generate test file of known content
+        let command = Command::new( "echo" )
+                        .arg( "-e" )
+                        .arg( FILE_CONTENT )
+                        .output()
+                        .expect( "Failed to execute command" );
+        let file_mode = FileMode{ f_write: true, f_create: true,
+                ..Default::default() };
+        let test_file: String = TEST_FILE.to_string() +
+            test_num.to_string().as_str();
+        let mut file_opened = file_opener( &test_file, file_mode )
+                .expect( "Failed to open test file" );
+        file_opened.write( &command.stdout )
+                .expect( "Failed to write to file" );
+        Buffer::new( BufferInput::File( test_file ) )
+    }
+    fn open_command_buffer_test() -> Buffer {
+        Buffer::new( BufferInput::Command(
+                            "echo -e ".to_string() + COMMAND_CONTENT
+                                         )
+                   )
+    }
+    fn open_empty_buffer_test() -> Buffer {
+        Buffer::new( BufferInput::None )
+    }
+    fn close_file_buffer_test( buffer: &mut Buffer ) {
+        match fs::remove_file( buffer.get_file_name()
+                                     .unwrap_or( "" ) )
+                                     .map_err( |x| RedError::FileRemove(x) ) {
+                Err(_) => {
+                    println!( "Failed to delete test file" );
+                },
+                Ok(_) => {},
+            }
+        buffer.destruct().unwrap();
+    }
+    fn close_command_buffer_test( buffer: &mut Buffer ) {
+        buffer.destruct().unwrap();
+    }
+    /*
+    fn close_empty_buffer_test( buffer: &mut Buffer ) {
+        buffer.destruct().unwrap();
+    }
+    */
+
+    /// store contents in a buffer and read the correct line back
+    #[test]
+    fn file_buffer_test_1() {
+        // Common test start routine
+        let test_num: u8 = 1;
+        let mut buffer = open_file_buffer_test( test_num );
+
+        // Apply actual test(s)
+        assert_eq!( buffer.get_line_content( 2 ).expect("FAILb1!"),
+                "testfile2" );
+
+        // Common test close routine
+        close_file_buffer_test( &mut buffer );
+    }
+    #[test]
+    fn file_buffer_test_2() {
+        // Common test start routine
+        /*
+        let test_num: u8 = 2;
+        let mut buffer = open_file_buffer_test( test_num );
+
+        // Apply actual test(s)
+
+        // Common test close routine
+        close_file_buffer_test( &mut buffer );
+        */
+    }
+    #[test]
+    fn command_buffer_test() {
+        let mut buffer = open_command_buffer_test();
+        assert_eq!( buffer.get_line_content( 2 ).expect("FAIL!"), "testcmd2" );
+        close_command_buffer_test( &mut buffer );
+    }
+    /*
+    #[test]
+    fn empty_buffer_test() {
+        let buffer = open_empty_buffer_test();
+    }
+    */
+
+}
 
