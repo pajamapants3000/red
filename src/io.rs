@@ -155,25 +155,85 @@ fn split_args( stringed: &str ) -> Vec<String> {
             },
         }
     }
-    println!("args: {:?}", arguments);
     arguments
 }
 
-/// return true if character is quoted according to BEGQUOT and ENDQUOT
+/// return true if character is quoted according to BEGquot and ENDquot
 ///
-/// BEGQUOT and ENDQUOT are each a set of quote characters
+/// BEGquot and ENDquot are each a set of quote characters
 /// A character is quoted if, for some index i, it has
-/// [ num(BEGQUOT[i]) - num(ENDQUOT[i]) ] > 0 to the left
-/// [ num(ENDQUOT[i]) - num(BEGQUOT[i]) ] > 0 to the right
-/// BEGQUOT = [ "\"", "'", "`", "(", "[", "{" ]
-/// ENDQUOT = [ "\"", "'", "`", ")", "]", "}" ]
+/// [ num(BEGquot[i]) - num(ENDquot[i]) ] > 0 to the left
+/// [ num(ENDquot[i]) - num(BEGquot[i]) ] > 0 to the right
+/// BEGquot = [ "\"", "'", "`", "(", "[", "{" ]
+/// ENDquot = [ "\"", "'", "`", ")", "]", "}" ]
 /// in some cases, we may want to include <>, but this should do it for
 /// the most part I think
 /// We also return true if indx immediately preceeded by odd number of
 /// backslashes
 /// XXX: What if the quoted string is not space-separated from the rest?
+/// TODO: Implementation is slow, inelegant, brute-force approach
+/// XXX: Do we really care about the right side? That's more a question of
+/// whether the user properly closed their quotes
+/// XXX: We ignore all parens if quoted, otherwise
+/// include them even if backslash-escaped
 fn is_quoted( text: &str, indx: usize ) -> bool {
-    false   // placeholder; unused_variables warnings
+    let bra:  Vec<char> = vec!('(', '[', '{');
+    let ket:  Vec<char> = vec!(')', ']', '}');
+    let quot: Vec<char> = vec!('"', '\'', '`');
+    let mut c_braket:  Vec<isize> = vec!( 0; bra.len() );
+    let mut c_quote:   Vec<isize> = vec!( 0; quot.len() );
+    let mut escaped: bool = false;
+    let mut move_on: bool;  // avoid unnecessary tests in mess below
+    //
+    let (left, _) = text.split_at( indx );
+    //
+    for ch in left.chars() {
+        move_on = false;
+        if ch == '\\' {
+            escaped = !escaped;
+            continue
+        }
+        for i in 0 .. quot.len() {
+            if ch == quot[i] {
+                c_quote[i] = 1 - c_quote[i];    // switch on/off
+                move_on = true;
+                escaped = false;
+            }
+        }
+        if move_on {
+            continue
+        }
+        for i in 0 .. bra.len() {
+            if ch == bra[i] {
+                if c_quote == vec!( 0; c_quote.len() ) {
+                    c_braket[i] += 1;
+                    move_on = true;
+                    escaped = false;
+                }
+            }
+        }
+        if move_on {
+            continue
+        }
+        for i in 0 .. ket.len() {
+            if ch == ket[i] {
+                if c_quote == vec!( 0; c_quote.len() ) {
+                    c_braket[i] -= 1;
+                }
+            }
+        }
+        escaped = false;
+    }
+    // sanity check
+    for sum in &c_braket {
+        assert!( *sum >= 0 );    // all (unquoted) kets must follow a bra
+    }
+    if c_quote == vec!( 0; c_quote.len() ) &&
+            c_braket == vec!( 0; c_braket.len() ) {
+        false
+    } else {
+        true
+    }
 }
 // ^^^ Functions ^^^ }}}
 

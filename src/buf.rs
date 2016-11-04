@@ -21,6 +21,7 @@ use std::iter::{IntoIterator, FromIterator, Iterator};
 
 use ::chrono::*;
 use ::regex::Regex;
+use ::rand::{thread_rng, Rng};
 
 use io::*;
 use error::*;
@@ -381,10 +382,15 @@ fn get_null_time() -> datetime::DateTime<UTC> {// {{{
 
 /// Produce name for temporary buffer storage
 fn temp_file_name( file_name: Option<&str> ) -> String {// {{{
+    // only way to conflict is by choosing the same eight alphanumeric
+    // characters in less than a second!
+    let random_string: String = thread_rng()
+                                .gen_ascii_chars().take(8).collect();
     match file_name {
         Some(x) => ".red.".to_string() + x +
-                "." + &get_timestamp(),
-        None => ".red.".to_string() + &get_timestamp(),
+                ".temp." + random_string.as_str() + "." + &get_timestamp(),
+        None => ".red.temp.".to_string() + random_string.as_str() +
+            "." + &get_timestamp(),
     }
 }// }}}
 
@@ -404,11 +410,11 @@ mod tests {// {{{
     //  ^^^     ^^^     Bring into namespace    ^^^     ^^^ //// }}}
 
     //  ***     ***     Constants   ***     ***     //// {{{
-    static TEST_FILE: &'static str = "red_filetest";
-    static FILE_CONTENT_LINE: &'static str = "testfile";
-    static COMMAND_CONTENT_LINE: &'static str = "testcmd";
-    static FILE_FILE_SUFFIX: &'static str = ".file";
-    static COMMAND_FILE_SUFFIX: &'static str = ".cmd";
+    const TEST_FILE: &'static str = "red_filetest";
+    const FILE_CONTENT_LINE: &'static str = "testfile";
+    const COMMAND_CONTENT_LINE: &'static str = "testcmd";
+    const FILE_FILE_SUFFIX: &'static str = ".file";
+    const COMMAND_FILE_SUFFIX: &'static str = ".cmd";
     //  ^^^     ^^^     Constants   ^^^     ^^^     //// }}}
 
     // begin prep functions
@@ -596,6 +602,8 @@ mod tests {// {{{
                     FILE_FILE_SUFFIX + test_num.to_string().as_str() );
             buffer.set_file_name( &alt_file_name );
             assert_eq!( buffer.get_file_name().unwrap(), alt_file_name );
+            buffer.set_file_name( &(TEST_FILE.to_string() +
+                FILE_FILE_SUFFIX + test_num.to_string().as_str() ));
         }
 
         //
@@ -692,7 +700,7 @@ mod tests {// {{{
         {
             let mut lines_iter = buffer.lines_iterator();
             // NOTE: We don't iterate to num_lines+1 because the last line
-            // is blank and won't match the expectation value
+            // is blank and won't match the expected value
             for test_line in 1 .. buffer.num_lines() {
                 expectation = COMMAND_CONTENT_LINE.to_string() +
                     test_line.to_string().as_str();

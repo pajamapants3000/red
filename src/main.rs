@@ -20,6 +20,7 @@
 //extern crate clap;
 extern crate chrono;
 extern crate regex;
+extern crate rand;
 #[macro_use]
 extern crate lazy_static;
 

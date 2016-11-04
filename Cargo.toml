@@ -7,4 +7,5 @@ authors = ["Tommy Lincoln <pajamapants3000@gmail.com>"]
 chrono = "0.2"
 regex = "0.1"
 lazy_static = "0.2"
+rand = "0.3"
 
