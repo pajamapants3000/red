@@ -6,8 +6,7 @@
  * Authors: Tommy Lincoln <pajamapants3000@gmail.com>
  * License: MIT; See LICENSE!
  * Notes  : Notes on successful compilation
- * Created: 10/26/2016
- */
+ * Created: 10/26/2016 */
 #![allow(dead_code)]
 // *** Bring in to namespace *** {{{
 
@@ -128,9 +127,9 @@ impl Buffer {   //{{{
         self.total_lines
     }// }}}
     /// Return true if buffer modified since last write
-    pub fn is_modified( &self ) -> bool {
+    pub fn is_modified( &self ) -> bool {// {{{
         self._is_modified
-    }
+    }// }}}
     // later, change approach to homogenize file/stdout source
     // generate iterator over BufRead object, either file, stdout, or empty
     /// Return the linked-list of lines to store in buffer
@@ -215,14 +214,14 @@ impl Buffer {   //{{{
     /// Replace line with new string
     ///
     /// TODO: Add error handling; panics if line_num > len
-    pub fn set_line_content( &mut self, line_num: usize, new_line: String )// {{{
+    pub fn set_line_content( &mut self, line_num: usize, new_line: &str )// {{{
             -> Result<(), RedError> {
         if line_num > self.lines.len() {
             return Err(RedError::SetLineOutOfBounds);
         }
         let mut back_list = self.lines.split_off( line_num - 1 );
         let _ = back_list.pop_front();
-        self.lines.push_back( new_line );
+        self.lines.push_back( new_line.to_string() );
         self.lines.append( &mut back_list );
         Ok( () )
     }// }}}
@@ -392,7 +391,8 @@ fn temp_file_name( file_name: Option<&str> ) -> String {// {{{
 // ^^^ Functions ^^^ }}}
 
 #[cfg(test)]
-mod tests {
+mod tests {// {{{
+    //  ***     ***      Bring into namespace   ***     *** //// {{{
     use std::process::Command;
     use std::fs;
     use std::io::Write;
@@ -401,16 +401,41 @@ mod tests {
     use super::*;
     use error::*;
     use io::*;
+    //  ^^^     ^^^     Bring into namespace    ^^^     ^^^ //// }}}
 
+    //  ***     ***     Constants   ***     ***     //// {{{
     static TEST_FILE: &'static str = "red_filetest";
-    static FILE_CONTENT: &'static str = r#"testfile1\ntestfile2\ntestfile3\n"#;
-    static COMMAND_CONTENT: &'static str = "testcmd1\ntestcmd2\ntestcmd3\n";
+    static FILE_CONTENT_LINE: &'static str = "testfile";
+    static COMMAND_CONTENT_LINE: &'static str = "testcmd";
+    //  ^^^     ^^^     Constants   ^^^     ^^^     //// }}}
 
-    fn open_file_buffer_test( test_num: u8 ) -> Buffer {
+    // begin prep functions
+    /// Generate and return string containing lines for testing
+    ///
+    /// Takes string to use as base for text on each line
+    /// This string will have the line number appended
+    /// Also takes a single u8 integer, the number of lines to generate
+    fn test_lines( line_str: &str, num_lines: usize ) -> String {// {{{
+        let mut file_content = "".to_string();
+        let mut next: String;
+        for i in 1 .. ( num_lines + 1 ) {
+            next = line_str.to_string() + i.to_string().as_str();
+            next = next + "\n";
+            file_content.push_str( &next );
+        }
+        file_content
+    }// }}}
+
+    /// Prep and return buffer for use in "file buffer" test functions
+    ///
+    /// uses test_lines function to create file with which buffer
+    /// is initialized
+    fn open_file_buffer_test( test_num: u8 ) -> Buffer {// {{{
+        let num_lines: usize = 5;   // number of lines to have in buffer
         // generate test file of known content
         let command = Command::new( "echo" )
                         .arg( "-e" )
-                        .arg( FILE_CONTENT )
+                        .arg( &test_lines( FILE_CONTENT_LINE, num_lines ) )
                         .output()
                         .expect( "Failed to execute command" );
         let file_mode = FileMode{ f_write: true, f_create: true,
@@ -421,18 +446,32 @@ mod tests {
                 .expect( "Failed to open test file" );
         file_opened.write( &command.stdout )
                 .expect( "Failed to write to file" );
+        // create new buffer from this file
         Buffer::new( BufferInput::File( test_file ) )
-    }
-    fn open_command_buffer_test() -> Buffer {
-        Buffer::new( BufferInput::Command(
-                            "echo -e ".to_string() + COMMAND_CONTENT
-                                         )
-                   )
-    }
-    fn open_empty_buffer_test() -> Buffer {
+    }// }}}
+    /// Prep and return buffer for use in "command buffer" test functions
+    ///
+    /// uses test_lines function to create file with which buffer
+    /// is initialized
+    fn open_command_buffer_test( test_num: u8 ) -> Buffer {// {{{
+        //
+        let num_lines: usize = 5;   // number of lines to have in buffer
+        let test_file: String = TEST_FILE.to_string() +
+                test_num.to_string().as_str();
+        let mut buffer = Buffer::new( BufferInput::Command(
+                            "echo -e ".to_string() +
+                            &test_lines( COMMAND_CONTENT_LINE,
+                                         num_lines ) ));
+        buffer.set_file_name( &test_file );
+        buffer
+    }// }}}
+    /// Prep and return buffer for use in "empty buffer" test functions
+    fn open_empty_buffer_test() -> Buffer {// {{{
         Buffer::new( BufferInput::None )
-    }
-    fn close_file_buffer_test( buffer: &mut Buffer ) {
+    }// }}}
+    /// deconstruct buffer from "file buffer" test
+    /// any other necessary closing actions
+    fn close_file_buffer_test( buffer: &mut Buffer ) {// {{{
         match fs::remove_file( buffer.get_file_name()
                                      .unwrap_or( "" ) )
                                      .map_err( |x| RedError::FileRemove(x) ) {
@@ -442,55 +481,206 @@ mod tests {
                 Ok(_) => {},
             }
         buffer.destruct().unwrap();
-    }
-    fn close_command_buffer_test( buffer: &mut Buffer ) {
+    }// }}}
+    /// deconstruct buffer from "command buffer" test;
+    /// any other necessary closing actions
+    fn close_command_buffer_test( buffer: &mut Buffer ) {// {{{
         buffer.destruct().unwrap();
-    }
+    }// }}}
     /*
-    fn close_empty_buffer_test( buffer: &mut Buffer ) {
+    /// deconstruct buffer from "empty buffer" test
+    /// any other necessary closing actions
+    fn close_empty_buffer_test( buffer: &mut Buffer ) {// {{{
         buffer.destruct().unwrap();
-    }
+    }// }}}
     */
+    // end prep functions
 
-    /// store contents in a buffer and read the correct line back
+    // begin test functions// {{{
+    /// read line from buffer
     #[test]
-    fn file_buffer_test_1() {
+    fn file_buffer_test_1() {// {{{
         // Common test start routine
+        // set contstants
         let test_num: u8 = 1;
+        let test_line: usize = 2;
+        //
         let mut buffer = open_file_buffer_test( test_num );
+        let expectation =
+                FILE_CONTENT_LINE.to_string() + test_line.to_string().as_str();
+        //
 
         // Apply actual test(s)
-        assert_eq!( buffer.get_line_content( 2 ).expect("FAILb1!"),
-                "testfile2" );
+        assert_eq!( buffer.get_line_content( test_line ).unwrap(),
+                &expectation );
+        //
 
         // Common test close routine
         close_file_buffer_test( &mut buffer );
-    }
+    }// }}}
+    /// Test get_line_content() values
     #[test]
-    fn file_buffer_test_2() {
-        // Common test start routine
-        /*
+    fn file_buffer_test_2() {// {{{
+        // set contstants
         let test_num: u8 = 2;
+        //
         let mut buffer = open_file_buffer_test( test_num );
+        let mut expectation: String;
+        //
 
         // Apply actual test(s)
+        {
+            // NOTE: We don't iterate to num_lines+1 because the last line
+            // is blank and won't match the expectation value
+            for test_line in 1 .. buffer.num_lines() {
+                expectation = FILE_CONTENT_LINE.to_string() +
+                    test_line.to_string().as_str();
+                assert_eq!( *buffer.get_line_content( test_line ).unwrap(),
+                        expectation );
+            }
+        }
+
+        //
 
         // Common test close routine
         close_file_buffer_test( &mut buffer );
-        */
-    }
+    }// }}}
+    /// Test lines_iterator() values
     #[test]
-    fn command_buffer_test() {
-        let mut buffer = open_command_buffer_test();
-        assert_eq!( buffer.get_line_content( 2 ).expect("FAIL!"), "testcmd2" );
+    fn file_buffer_test_3() {// {{{
+        // set contstants
+        let test_num: u8 = 3;
+        //
+        let mut buffer = open_file_buffer_test( test_num );
+        let mut expectation: String;
+        //
+
+        // Apply actual test(s)
+        {
+            let mut lines_iter = buffer.lines_iterator();
+            // NOTE: We don't iterate to num_lines+1 because the last line
+            // is blank and won't match the expectation value
+            for test_line in 1 .. buffer.num_lines() {
+                expectation = FILE_CONTENT_LINE.to_string() +
+                    test_line.to_string().as_str();
+                match lines_iter.next() {
+                    Some( line ) => {
+                        assert_eq!( *line, expectation );
+                    },
+                    None => break,
+                }
+            }
+        }
+
+        //
+
+        // Common test close routine
+        close_file_buffer_test( &mut buffer );
+    }// }}}
+    /// Test get_file_name() and set_file_name() functions
+    #[test]
+    fn file_buffer_test_4() {// {{{
+        // set contstants
+        let test_num: u8 = 4;
+        let alt_file_name = "red_anothertest".to_string();
+        //
+        let mut buffer = open_file_buffer_test( test_num );
+        //
+
+        // Apply actual test(s)
+        {
+            assert_eq!( buffer.get_file_name().unwrap(),
+                    TEST_FILE.to_string() + test_num.to_string().as_str() );
+            buffer.set_file_name( &alt_file_name );
+            assert_eq!( buffer.get_file_name().unwrap(), alt_file_name );
+        }
+
+        //
+
+        // Common test close routine
+        close_file_buffer_test( &mut buffer );
+    }// }}}
+    /// Test modifying buffer
+    #[test]
+    fn file_buffer_test_5() {// {{{
+        // set contstants
+        let test_num: u8 = 5;
+        let test_line: usize = 2;
+        let new_line_content: String = "This is the new line!".to_string();
+        //
+        let mut buffer = open_file_buffer_test( test_num );
+        let mut expectation: String;
+        //
+
+        // Apply actual test(s)
+        {
+            expectation = FILE_CONTENT_LINE.to_string() +
+                test_line.to_string().as_str();
+            assert_eq!( *buffer.get_line_content( test_line ).unwrap(),
+                    expectation );
+            buffer.set_line_content( test_line, &new_line_content ).unwrap();
+            expectation = new_line_content;
+            assert_eq!( *buffer.get_line_content( test_line ).unwrap(),
+                    expectation );
+        }
+
+        //
+
+        // Common test close routine
+        close_file_buffer_test( &mut buffer );
+    }// }}}
+    /// Read and compare/test a single line from "command buffer"
+    #[test]
+    fn command_buffer_test_1() {// {{{
+        // Common test start routine
+        // set contstants
+        let test_num: u8 = 1;
+        let test_line: usize = 2;
+        //
+        let mut buffer = open_command_buffer_test( test_num );
+        let expectation =
+                COMMAND_CONTENT_LINE.to_string() +
+                test_line.to_string().as_str();
+        //
+
+        // Apply actual test(s)
+        assert_eq!( buffer.get_line_content( test_line ).unwrap(),
+                    &expectation );
+        //
+
+        // Common test close routine
         close_command_buffer_test( &mut buffer );
-    }
+    }// }}}
+    /// Read and compare/test a single line from "command buffer"
+    #[test]
+    fn command_buffer_test_2() {// {{{
+        // Common test start routine
+        // set contstants
+        let test_num: u8 = 2;
+        //
+        let mut buffer = open_command_buffer_test( test_num );
+        let mut expectation: String;
+        //
+
+        // Apply actual test(s)
+        for test_line in 1 .. buffer.num_lines() {
+            expectation = COMMAND_CONTENT_LINE.to_string() +
+                test_line.to_string().as_str();
+            assert_eq!( *buffer.get_line_content( test_line ).unwrap(),
+                    expectation );
+        }
+        //
+
+        // Common test close routine
+        close_command_buffer_test( &mut buffer );
+    }// }}}
     /*
     #[test]
-    fn empty_buffer_test() {
+    fn empty_buffer_test() {// {{{
         let buffer = open_empty_buffer_test();
-    }
-    */
+    }// }}}
+    */// }}}
+    // end test functions
 
-}
+}// }}}
 

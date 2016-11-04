@@ -49,53 +49,12 @@ fn main() {// {{{
 
     // take as direct arg; will later be arg to flag
     let file_name = args[1].to_string();
+    let mut buffer = Buffer::new(BufferInput::File(file_name));
 
-    // Test routine
-    let mut buffer1 = Buffer::new( BufferInput::File( file_name ) );
-    let mut buffer = Buffer::new( BufferInput::Command( "ls".to_string() ) );
-    for line in 0 .. buffer.num_lines() {
-        println!("{}", buffer.get_line_content( line + 1 ).unwrap_or(""));
-    }
-    // confirm buffer is still valid
-    {
-        let mut lines_iterator = buffer.lines_iterator();
-        loop {
-            match &lines_iterator.next() {
-                &Some( ref line ) => {
-                    println!("{}", line );
-                },
-                &None => break,
-            }
-        }
-    }
-    // print file name
-    println!("file: {}", buffer.get_file_name().unwrap_or("nofile") );
-    // set new file name
-    buffer.set_file_name( "myfile.txt" );
-    // print new file name
-    println!("file: {}", buffer.get_file_name().unwrap_or("nofile") );
-    {
-        let mut _line_2 = buffer.get_line_content( 2 ).unwrap_or("missing");
-        println!("line 2: {}", _line_2);
-    }
-    buffer.set_line_content( 2, "this is the new line".to_string() ).unwrap();
-    {
-        let mut _line_2 = buffer.get_line_content( 2 ).unwrap_or("missing");
-        println!("new line 2: {}", _line_2 );
-    }
-    println!("Let's print one last time...");
-    for line in 0 .. buffer.num_lines() {
-        println!("{}", buffer.get_line_content( line + 1 ).unwrap_or(""));
-    }
-    //buffer.write_to_disk().expect("unable to save file");
-    buffer.store_buffer().expect("Failed to store buffer on disk");
-    buffer1.store_buffer().expect("Failed to store buffer on disk");
+    println!("file_name: {}", buffer.get_file_name().unwrap_or("") );
 
-    buffer1.destruct().expect("Failed to deconstruct buffer1");
     quit( &mut buffer )
 
-    // end test routine
-    
 }// }}}
 
 /// Exit program
