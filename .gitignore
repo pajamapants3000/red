@@ -9,3 +9,7 @@ Cargo.lock
 # vim swap files
 **\.sw*
 
+# red test files
+\.red*
+red_*
+
