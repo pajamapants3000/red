@@ -18,8 +18,8 @@ use std::str::Chars;
 
 // *** Data Structures *** {{{
 pub struct Command<'a> {
-    pub address_initial: u32,
-    pub address_final: u32,
+    pub address_initial: usize,
+    pub address_final: usize,
     pub operation: char,
     pub parameters: &'a str,
 }
@@ -29,39 +29,47 @@ pub struct Command<'a> {
 ///
 /// This is the public interface to the parse module
 ///
-pub fn parse_command<'a>( _cmd_input: &'a str, file_opened: &File ) -> Command<'a> {
+pub fn parse_command<'a>( _cmd_input: &'a str, file_opened: &File )
+        -> Result<Command<'a>, RedError> {
     // MUST initialize?
-    let mut _address_initial: u32 = 1;
-    let mut _address_final: u32 = 1;
+    let mut _address_initial: usize = 1;
+    let mut _address_final: usize = 1;
     let mut _operation: char = 'p';
-    let mut _parameters: &str = _cmd_input;
+    let _parameters: &str;
+    let addrs: &str;
 
-    let op_indx: usize;
-    op_indx = get_opchar_index( _cmd_input ).unwrap_or( 0usize );
-    _address_final = op_indx as u32;
+    let ( op_indx, _operation ) = get_opchar_index( _cmd_input )
+            .expect( "parse_command: unable to determine opchar" );
 
-    match get_address( "", file_opened ) {
+    match _cmd_input.split_at( op_indx ) {
+        (x, y) => {
+            addrs = x;
+            _parameters = &y[2..];
+        },
+    }
+    match get_address( addrs, file_opened ) {
         ( x, y ) => {
             _address_initial = x;
             _address_final = y;
         }
     }
 
-    Command {
-        address_initial: _address_initial,
-        address_final: _address_final,
-        operation: _operation,
-        parameters: _parameters,
-    }
+    Ok( Command {
+            address_initial: _address_initial,
+            address_final: _address_final,
+            operation: _operation,
+            parameters: _parameters,
+        }
+    )
 }
 //}}}
 
 /// Identify address or address range {{{
 ///
 #[allow(unused_variables)]
-fn get_address( address_string: &str, file_opened: &File ) -> ( u32, u32 ) {
+fn get_address( address_string: &str, file_opened: &File ) -> (usize, usize) {
     // start with simple auto-return of ( 1u32, 2u32 )
-    ( 1u32, 2u32 )
+    ( 1_usize, 2_usize )
 }
 //}}}
 
@@ -134,20 +142,22 @@ fn get_address( address_string: &str, file_opened: &File ) -> ( u32, u32 ) {
 /// assert_eq!( get_opchar_index( _in ), 37 );
 /// ```
 ///
-fn get_opchar_index( _cmd_input: &str ) -> Result<usize, RedError> {
-    let mut result: i32 = -1;
+fn get_opchar_index( _cmd_input: &str ) -> Result<(usize, char), RedError> {
+    let mut result_indx: Option<usize> = None;
+    let mut result_char: char = '\0';
 
     struct Interpret {
-        index: u16,         // index of character in string
+        index: usize,       // index of character in string
         pattern_char: char, // stores '/' or '?' while reading pattern
         escape: bool,       // last character read was '\'
         expect: bool,       // we expect next char to be ',', ';', or alpha
     }
     let mut current_state: Interpret = Interpret {
-        index: 0u16,
+        index: 0_usize,
+        // TODO: change pattern_char to pair of bool switches for // and ??
         pattern_char: '\0',
         escape: false,
-        expect: false,
+        expect: false,  // expect subsequent , or ;
     };
 
     let mut ch_iter: Chars = _cmd_input.trim_left().chars();
@@ -160,7 +170,8 @@ fn get_opchar_index( _cmd_input: &str ) -> Result<usize, RedError> {
                     if current_state.expect {
                         match x {
                             'a'...'z' | 'A'...'Z' => {
-                                result = current_state.index as i32;
+                                result_indx = Some( current_state.index );
+                                result_char = x;
                                 break;
                             },
                             ',' | ';' => {
@@ -178,7 +189,8 @@ fn get_opchar_index( _cmd_input: &str ) -> Result<usize, RedError> {
                             }
                         }
                         'a'...'z' | 'A'...'Z' => {
-                            result = current_state.index as i32;
+                            result_indx = Some( current_state.index );
+                            result_char = x;
                             break;
                         },
                         '\\' => current_state.escape = true,
@@ -213,11 +225,12 @@ fn get_opchar_index( _cmd_input: &str ) -> Result<usize, RedError> {
         }
         current_state.index += 1;
     }
-    if result < 0 {
-        Result::Err( RedError::FileClose )
-    } else {
-        println!("result {:?}", result);
-        Result::Ok( result as usize )   // result will be positive here
+    match result_indx {
+        Some(x) => {
+            println!( "opchar result {:?}, {:?}", result_indx, result_char );
+            Result::Ok( (x, result_char) )
+        },
+        None => Result::Err( RedError::OpCharIndex ),
     }
 }
 
@@ -230,48 +243,55 @@ mod tests {
 #[test]
 fn get_opchar_index_test_1() {
        let _in: &str = "e myfile.txt";
-       assert_eq!( get_opchar_index( _in ).unwrap_or(9999), 0 );
+       assert_eq!( get_opchar_index( _in ).unwrap_or( (9999, '\0') ),
+               (0, 'e') );
 }
 
 /// No address given, with spaces
 #[test]
 fn get_opchar_index_test_2() {
     let _in: &str = "       e myfile.txt";
-    assert_eq!( get_opchar_index( _in ).unwrap_or(9999), 0 );
+    assert_eq!( get_opchar_index( _in ).unwrap_or( (9999, '\0') ),
+            (0, 'e') );
 }
 
 /// No address given, with spaces and tabs
 #[test]
 fn get_opchar_index_test_3() {
     let _in: &str = "  		  	e myfile.txt";
-    assert_eq!( get_opchar_index( _in ).unwrap_or(9999), 0 );
+    assert_eq!( get_opchar_index( _in ).unwrap_or( (9999, '\0') ),
+            (0, 'e') );
 }
 
 /// Most basic address value types
 #[test]
 fn get_opchar_index_test_4() {
     let _in: &str = ".a";
-    assert_eq!( get_opchar_index( _in ).unwrap_or(9999), 1 );
+    assert_eq!( get_opchar_index( _in ).unwrap_or( (9999, '\0') ),
+            (1, 'a') );
 }
 
 #[test]
 fn get_opchar_index_test_5() {
     let _in: &str = ".,.p";
-    assert_eq!( get_opchar_index( _in ).unwrap_or(9999), 3 ); // test
+    assert_eq!( get_opchar_index( _in ).unwrap_or( (9999, '\0') ),
+            (3, 'p') );
 }
 
 /// Slightly more complicated
 #[test]
 fn get_opchar_index_test_6() {
     let _in: &str = ".-2,.+2p";
-    assert_eq!( get_opchar_index( _in ).unwrap_or(9999), 7 ); //test
+    assert_eq!( get_opchar_index( _in ).unwrap_or( (9999, '\0') ),
+            (7, 'p') );
 }
 
 /// Regular expression match line search forward
 #[test]
 fn get_opchar_index_test_7() {
     let _in: &str = "/^Beginning with.*$/;/.* at the end$/s_mytest_yourtest_g";
-    assert_eq!( get_opchar_index( _in ).unwrap_or(9999), 37 );
+    assert_eq!( get_opchar_index( _in ).unwrap_or( (9999, '\0') ),
+            (37, 's') );
 }
 
 /// Regular expression match line search forward with spaces and tabs
@@ -279,14 +299,16 @@ fn get_opchar_index_test_7() {
 fn get_opchar_index_test_8() {
     let _in: &str =
     "		  	/^Beginning with.*$/;/.* at the end$/s_mytest_yourtest_g";
-    assert_eq!( get_opchar_index( _in ).unwrap_or(9999), 37 );
+    assert_eq!( get_opchar_index( _in ).unwrap_or( (9999, '\0') ),
+            (37, 's') );
 }
 
 /// Regular expression match line search backward
 #[test]
 fn get_opchar_index_test_9() {
     let _in: &str = "?^Beginning with.*$?,?.* at the end$?s_mytest_yourtest_g";
-    assert_eq!( get_opchar_index( _in ).unwrap_or(9999), 37 );
+    assert_eq!( get_opchar_index( _in ).unwrap_or( (9999, '\0') ),
+            (37, 's') );
 }
 
 }

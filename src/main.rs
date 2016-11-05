@@ -25,7 +25,7 @@ extern crate rand;
 extern crate lazy_static;
 
 mod io;
-//mod parse;
+mod parse;
 mod error;
 mod buf;
 
@@ -39,7 +39,12 @@ use buf::{Buffer, BufferInput};
 
 // ^^^ Constants ^^^ }}}
 // *** Data Structures *** {{{
-
+enum EditorMode {
+    Command,
+    Insert  { line: usize },
+    Replace { line: usize },
+    View,
+}
 // ^^^ Data Structures ^^^ }}}
 
 // *** Functions *** {{{
