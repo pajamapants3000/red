@@ -22,8 +22,8 @@ pub enum RedError {
     FileRemove(io::Error),
 //    FileClose(io::Error),
     SetLineOutOfBounds,
-    ParseCommand,
-    OpCharIndex
+//    ParseCommand,
+    OpCharIndex,
 }
 // ^^^ Data Structures ^^^ }}}
 
@@ -38,7 +38,7 @@ pub fn error_code( _error: RedError ) -> u32 {
         RedError::FileRemove(_) => 283,
 //        RedError::FileClose(_) => 284,
         RedError::SetLineOutOfBounds => 290,
-        RedError::ParseCommand => 300,
+//        RedError::ParseCommand => 300,
         RedError::OpCharIndex => 301,
     }
 }

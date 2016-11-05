@@ -171,7 +171,7 @@ fn split_args( stringed: &str ) -> Vec<String> {// {{{
 /// TODO: ? add escaped brackets as separate brackets, e.g. "(|[|{|\(|\[|\{"
 /// TODO: define bra, ket, and quot as global string or something and
 /// convert to vector in function?
-fn is_quoted( text: &str, indx: usize ) -> bool {// {{{
+pub fn is_quoted( text: &str, indx: usize ) -> bool {// {{{
     let bra:  Vec<char> = vec!('(', '[', '{');
     let ket:  Vec<char> = vec!(')', ']', '}');
     let quot: Vec<char> = vec!('"', '\'', '`');
@@ -190,7 +190,9 @@ fn is_quoted( text: &str, indx: usize ) -> bool {// {{{
         }
         for i in 0 .. quot.len() {
             if ch == quot[i] {
-                c_quote[i] = 1 - c_quote[i];    // switch on/off
+                if !escaped {
+                    c_quote[i] = 1 - c_quote[i];    // switch on/off
+                }
                 move_on = true;
                 escaped = false;
             }
@@ -201,7 +203,9 @@ fn is_quoted( text: &str, indx: usize ) -> bool {// {{{
         for i in 0 .. bra.len() {
             if ch == bra[i] {
                 if c_quote == vec!( 0; c_quote.len() ) {
-                    c_braket[i] += 1;
+                    if !escaped {
+                        c_braket[i] += 1;
+                    }
                     move_on = true;
                     escaped = false;
                 }
@@ -213,7 +217,9 @@ fn is_quoted( text: &str, indx: usize ) -> bool {// {{{
         for i in 0 .. ket.len() {
             if ch == ket[i] {
                 if c_quote == vec!( 0; c_quote.len() ) {
-                    c_braket[i] -= 1;
+                    if !escaped {
+                        c_braket[i] -= 1;
+                    }
                 }
             }
         }

@@ -10,10 +10,13 @@
  */
 
 // Bring in to namespace {{{
-use error::*;
-
 use std::fs::File;
-use std::str::Chars;
+use std::str::Bytes;
+
+use error::*;
+use io::*;
+use buf::*;
+
 // }}}
 
 // *** Data Structures *** {{{
@@ -29,7 +32,7 @@ pub struct Command<'a> {
 ///
 /// This is the public interface to the parse module
 ///
-pub fn parse_command<'a>( _cmd_input: &'a str, file_opened: &File )
+pub fn parse_command<'a>( _cmd_input: &'a str, buffer: &Buffer )
         -> Result<Command<'a>, RedError> {
     // MUST initialize?
     let mut _address_initial: usize = 1;
@@ -47,7 +50,7 @@ pub fn parse_command<'a>( _cmd_input: &'a str, file_opened: &File )
             _parameters = &y[2..];
         },
     }
-    match get_address( addrs, file_opened ) {
+    match get_address_range( addrs, buffer ) {
         ( x, y ) => {
             _address_initial = x;
             _address_final = y;
@@ -64,12 +67,15 @@ pub fn parse_command<'a>( _cmd_input: &'a str, file_opened: &File )
 }
 //}}}
 
-/// Identify address or address range {{{
+/// Identify address range {{{
 ///
-#[allow(unused_variables)]
-fn get_address( address_string: &str, file_opened: &File ) -> (usize, usize) {
+fn get_address_range( address_string: &str, buffer: &Buffer ) -> (usize, usize) {
     // start with simple auto-return of ( 1u32, 2u32 )
-    ( 1_usize, 2_usize )
+    ( 1_usize, 5_usize ) // for use with tests
+    /*
+    let address_initial: usize;
+    let address_final: usize;
+    */
 }
 //}}}
 
@@ -143,172 +149,190 @@ fn get_address( address_string: &str, file_opened: &File ) -> (usize, usize) {
 /// ```
 ///
 fn get_opchar_index( _cmd_input: &str ) -> Result<(usize, char), RedError> {
-    let mut result_indx: Option<usize> = None;
-    let mut result_char: char = '\0';
-
-    struct Interpret {
-        index: usize,       // index of character in string
-        pattern_char: char, // stores '/' or '?' while reading pattern
-        escape: bool,       // last character read was '\'
-        expect: bool,       // we expect next char to be ',', ';', or alpha
-    }
-    let mut current_state: Interpret = Interpret {
-        index: 0_usize,
-        // TODO: change pattern_char to pair of bool switches for // and ??
-        pattern_char: '\0',
-        escape: false,
-        expect: false,  // expect subsequent , or ;
-    };
-
-    let mut ch_iter: Chars = _cmd_input.trim_left().chars();
-
+    let mut current_indx: usize = 0;
+    let mut bytes_iter: Bytes = _cmd_input.trim().bytes();
     loop {
-        match ch_iter.next() {
-            None => break,
+        match bytes_iter.next() {
             Some( x ) => {
-                if current_state.pattern_char == '\0' {
-                    if current_state.expect {
+                if _cmd_input.is_char_boundary( current_indx ) {
+                    if !is_in_regex( _cmd_input.trim(), current_indx ) {
                         match x {
-                            'a'...'z' | 'A'...'Z' => {
-                                result_indx = Some( current_state.index );
-                                result_char = x;
-                                break;
+                            b'a'...b'z' | b'A'...b'Z' => {
+                                return Ok( (current_indx, x as char ) );
                             },
-                            ',' | ';' => {
-                                current_state.escape= false;
-                                current_state.expect = false
-                            },
-                            '\\' => current_state.escape = true,
-                            _ => break,
+                            _ => {},
                         }
                     }
-                    match x {
-                        '/' | '?' => {
-                            if !current_state.escape {
-                                current_state.pattern_char = x;
-                            }
-                        }
-                        'a'...'z' | 'A'...'Z' => {
-                            result_indx = Some( current_state.index );
-                            result_char = x;
-                            break;
-                        },
-                        '\\' => current_state.escape = true,
-                        _ => {
-                            current_state.escape= false;
-                            current_state.expect = false;
-                        },
-                    }
-                } else {
-                    match x {
-                        '/' => {
-                            if '/' == current_state.pattern_char {
-                                if !current_state.escape {
-                                    current_state.pattern_char = '\0';
-                                    current_state.expect = true;
-                                }
-                            }
-                        }
-                        '?' => {
-                            if '?' == current_state.pattern_char {
-                                if !current_state.escape {
-                                    current_state.pattern_char = '\0';
-                                    current_state.expect = true;
-                                }
-                            }
-                        }
-                        '\\' => current_state.escape = true,
-                        _ => {},
+                }
+            },
+            None => break,
+        }
+        current_indx += 1;
+    }
+    Result::Err( RedError::OpCharIndex )
+}
+/// Return true if index is contained in regex
+///
+/// Is regex if wrapped in /.../ or ?...? within larger string
+/// In some functions, we need to know this so we know how to treat the
+/// character
+fn is_in_regex( text: &str, indx: usize ) -> bool {// {{{
+    let regex: Vec<u8> = vec!(b'/', b'?');
+    let mut c_regex: Vec<bool> = vec!( false; regex.len() );
+    let mut c_indx: usize = 0;
+    let mut escaped: bool = false;
+    let thechar = &text[indx..indx+1];  // debug
+    //
+    let (left, _) = text.split_at( indx );
+    //
+    for ch in left.bytes() {
+        if left.is_char_boundary( c_indx ) {
+            if ch == b'\\' {
+                escaped = !escaped;
+                c_indx += 1;
+                continue
+            }
+            for i in 0 .. regex.len() {
+                if ch == regex[i] {
+                    if !escaped && !is_quoted( text, c_indx ) &&
+                            c_regex[1-i] == false {     // can't have both
+                        c_regex[i] = !c_regex[i];       // switch on/off
                     }
                 }
             }
+            escaped = false;
         }
-        current_state.index += 1;
+        c_indx += 1;
     }
-    match result_indx {
-        Some(x) => {
-            println!( "opchar result {:?}, {:?}", result_indx, result_char );
-            Result::Ok( (x, result_char) )
-        },
-        None => Result::Err( RedError::OpCharIndex ),
+    if c_regex == vec!( false; c_regex.len() ) {
+        println!("false");
+        false
+    } else {
+        println!("true");
+        true
     }
-}
-
+}// }}}
 #[cfg(test)]
 mod tests {
-    use super::get_opchar_index;
+    use super::{get_opchar_index, is_in_regex};
 
-// Tests for parse::get_opchar_index
-/// No address given
-#[test]
-fn get_opchar_index_test_1() {
-       let _in: &str = "e myfile.txt";
-       assert_eq!( get_opchar_index( _in ).unwrap_or( (9999, '\0') ),
-               (0, 'e') );
-}
+    // Tests for parse::get_opchar_index
+    /// No address given
+    #[test]
+    fn get_opchar_index_test_1() {
+           let _in: &str = "e myfile.txt";
+           assert_eq!( get_opchar_index( _in ).unwrap_or( (9999, '\0') ),
+                   (0, 'e') );
+    }
 
-/// No address given, with spaces
-#[test]
-fn get_opchar_index_test_2() {
-    let _in: &str = "       e myfile.txt";
-    assert_eq!( get_opchar_index( _in ).unwrap_or( (9999, '\0') ),
-            (0, 'e') );
-}
+    /// No address given, with spaces
+    #[test]
+    fn get_opchar_index_test_2() {
+        let _in: &str = "       e myfile.txt";
+        assert_eq!( get_opchar_index( _in ).unwrap_or( (9999, '\0') ),
+                (0, 'e') );
+    }
 
-/// No address given, with spaces and tabs
-#[test]
-fn get_opchar_index_test_3() {
-    let _in: &str = "  		  	e myfile.txt";
-    assert_eq!( get_opchar_index( _in ).unwrap_or( (9999, '\0') ),
-            (0, 'e') );
-}
+    /// No address given, with spaces and tabs
+    #[test]
+    fn get_opchar_index_test_3() {
+        let _in: &str = "  		  	e myfile.txt";
+        assert_eq!( get_opchar_index( _in ).unwrap_or( (9999, '\0') ),
+                (0, 'e') );
+    }
 
-/// Most basic address value types
-#[test]
-fn get_opchar_index_test_4() {
-    let _in: &str = ".a";
-    assert_eq!( get_opchar_index( _in ).unwrap_or( (9999, '\0') ),
-            (1, 'a') );
-}
+    /// Most basic address value types
+    #[test]
+    fn get_opchar_index_test_4() {
+        let _in: &str = ".a";
+        assert_eq!( get_opchar_index( _in ).unwrap_or( (9999, '\0') ),
+                (1, 'a') );
+    }
 
-#[test]
-fn get_opchar_index_test_5() {
-    let _in: &str = ".,.p";
-    assert_eq!( get_opchar_index( _in ).unwrap_or( (9999, '\0') ),
-            (3, 'p') );
-}
+    #[test]
+    fn get_opchar_index_test_5() {
+        let _in: &str = ".,.p";
+        assert_eq!( get_opchar_index( _in ).unwrap_or( (9999, '\0') ),
+                (3, 'p') );
+    }
 
-/// Slightly more complicated
-#[test]
-fn get_opchar_index_test_6() {
-    let _in: &str = ".-2,.+2p";
-    assert_eq!( get_opchar_index( _in ).unwrap_or( (9999, '\0') ),
-            (7, 'p') );
-}
+    /// Slightly more complicated
+    #[test]
+    fn get_opchar_index_test_6() {
+        let _in: &str = ".-2,.+2p";
+        assert_eq!( get_opchar_index( _in ).unwrap_or( (9999, '\0') ),
+                (7, 'p') );
+    }
 
-/// Regular expression match line search forward
-#[test]
-fn get_opchar_index_test_7() {
-    let _in: &str = "/^Beginning with.*$/;/.* at the end$/s_mytest_yourtest_g";
-    assert_eq!( get_opchar_index( _in ).unwrap_or( (9999, '\0') ),
-            (37, 's') );
-}
+    /// Regular expression match line search forward
+    #[test]
+    fn get_opchar_index_test_7() {
+        let _in: &str = "/^Beginning with.*$/;/.* at the end$/s_mytest_yourtest_g";
+        assert_eq!( get_opchar_index( _in ).unwrap_or( (9999, '\0') ),
+                (37, 's') );
+    }
 
-/// Regular expression match line search forward with spaces and tabs
-#[test]
-fn get_opchar_index_test_8() {
-    let _in: &str =
-    "		  	/^Beginning with.*$/;/.* at the end$/s_mytest_yourtest_g";
-    assert_eq!( get_opchar_index( _in ).unwrap_or( (9999, '\0') ),
-            (37, 's') );
-}
+    /// Regular expression match line search forward with spaces and tabs
+    #[test]
+    fn get_opchar_index_test_8() {
+        let _in: &str =
+        "	 	 /^Beginning with.*$/;/.* at the end$/s_mytest_yourtest_g";
+        assert_eq!( get_opchar_index( _in ).unwrap_or( (9999, '\0') ),
+                (37, 's') );
+    }
 
-/// Regular expression match line search backward
-#[test]
-fn get_opchar_index_test_9() {
-    let _in: &str = "?^Beginning with.*$?,?.* at the end$?s_mytest_yourtest_g";
-    assert_eq!( get_opchar_index( _in ).unwrap_or( (9999, '\0') ),
-            (37, 's') );
-}
+    /// Regular expression match line search backward
+    #[test]
+    fn get_opchar_index_test_9() {
+        let _in: &str = "?^Beginning with.*$?,?.* at the end$?s_mytest_yourtest_g";
+        assert_eq!( get_opchar_index( _in ).unwrap_or( (9999, '\0') ),
+                (37, 's') );
+    }
+
+    #[test]
+    fn is_in_regex_test_1() {
+        let haystack = "This is a / abc /string to search";
+        let indx = haystack.find( "abc" ).unwrap();
+        assert!( is_in_regex( haystack, indx ), "abc" );
+        let indx = haystack.find( "is a" ).unwrap();
+        assert!( !is_in_regex( haystack, indx ), "is a" );
+        let indx = haystack.find( "search" ).unwrap();
+        assert!( !is_in_regex( haystack, indx ), "search" );
+    }
+    #[test]
+    fn is_in_regex_test_2() {
+        let haystack = "This is a ? abc ?string to search";
+        let indx = haystack.find( "abc" ).unwrap();
+        assert!( is_in_regex( haystack, indx ) );
+        let indx = haystack.find( "is a" ).unwrap();
+        assert!( !is_in_regex( haystack, indx ) );
+        let indx = haystack.find( "string" ).unwrap();
+        assert!( !is_in_regex( haystack, indx ) );
+    }
+    #[test]
+    fn is_in_regex_test_3() {
+        let haystack = r#"?This? "is a / abc /string" to search"#;
+        let indx = haystack.find( "abc" ).unwrap();
+        assert!( !is_in_regex( haystack, indx ) );
+        let indx = haystack.find( "is a" ).unwrap();
+        assert!( !is_in_regex( haystack, indx ) );
+        let indx = haystack.find( "string" ).unwrap();
+        assert!( !is_in_regex( haystack, indx ) );
+        let indx = haystack.find( "This" ).unwrap();
+        assert!( is_in_regex( haystack, indx ) );
+    }
+    #[test]
+    fn is_in_regex_test_4() {
+        let haystack: &str =
+        "		  	/^Beginning with.*$/;/.* at the end$/s_mytest_yourtest_g";
+        let indx = haystack.find( "Beginning" ).unwrap();
+        assert!( is_in_regex( haystack, indx ) );
+        let indx = haystack.find( "the end" ).unwrap();
+        assert!( is_in_regex( haystack, indx ) );
+        let indx = haystack.find( "with" ).unwrap();
+        assert!( is_in_regex( haystack, indx ) );
+        let indx = haystack.find( "mytest" ).unwrap();
+        assert!( !is_in_regex( haystack, indx ) );
+    }
 
 }
