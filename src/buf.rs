@@ -369,7 +369,6 @@ impl Buffer {   //{{{
 /// Get timestamp to use for buffer filename
 fn get_timestamp() -> String {// {{{
     let dt = UTC::now();
-
     dt.format("%Y%m%d%H%M%S").to_string()
 
 }// }}}
@@ -412,7 +411,8 @@ mod tests {// {{{
     //  ***     ***     Constants   ***     ***     //// {{{
     const TEST_FILE: &'static str = "red_filetest";
     const FILE_CONTENT_LINE: &'static str = "testfile";
-    const COMMAND_CONTENT_LINE: &'static str = "testcmd";
+    const COMMAND_CONTENT_LINE_1: &'static str = "testcmd";
+    const COMMAND_CONTENT_LINE_2: &'static str = "testcmda testcmdb";
     const FILE_FILE_SUFFIX: &'static str = ".file";
     const COMMAND_FILE_SUFFIX: &'static str = ".cmd";
     //  ^^^     ^^^     Constants   ^^^     ^^^     //// }}}
@@ -461,15 +461,21 @@ mod tests {// {{{
     ///
     /// uses test_lines function to create file with which buffer
     /// is initialized
-    fn open_command_buffer_test( test_num: u8 ) -> Buffer {// {{{
+    fn open_command_buffer_test( test_num: u8, command_line_version: u8 )// {{{
+            -> Buffer {
         //
-        let num_lines: usize = 5;   // number of lines to have in buffer
+        let num_lines: usize = 7;   // number of lines to have in buffer
+        let command_content_line = match command_line_version {
+            1_u8 => COMMAND_CONTENT_LINE_1,
+            2_u8 => COMMAND_CONTENT_LINE_2,
+            _ => "",
+        };
         let test_file: String = TEST_FILE.to_string() +
                 COMMAND_FILE_SUFFIX + test_num.to_string().as_str();
-        let mut buffer = Buffer::new( BufferInput::Command(
-                            "echo -e ".to_string() +
-                            &test_lines( COMMAND_CONTENT_LINE,
-                                         num_lines ) ));
+        let test_command = "echo -e ".to_string() +
+                                    &test_lines( command_content_line,
+                                    num_lines );
+        let mut buffer = Buffer::new( BufferInput::Command( test_command ));
         buffer.set_file_name( &test_file );
         buffer
     }// }}}
@@ -647,10 +653,12 @@ mod tests {// {{{
         // set contstants
         let test_num: u8 = 1;
         let test_line: usize = 2;
+        let command_line_version: u8 = 1;
         //
-        let mut buffer = open_command_buffer_test( test_num );
+        let mut buffer = open_command_buffer_test( test_num,
+                                                   command_line_version );
         let expectation =
-                COMMAND_CONTENT_LINE.to_string() +
+                COMMAND_CONTENT_LINE_1.to_string() +
                 test_line.to_string().as_str();
         //
 
@@ -668,15 +676,16 @@ mod tests {// {{{
         // Common test start routine
         // set contstants
         let test_num: u8 = 2;
+        let command_line_version: u8 = 1;
         //
-        let mut buffer = open_command_buffer_test( test_num );
+        let mut buffer = open_command_buffer_test( test_num,
+                                                   command_line_version );
         let mut expectation: String;
         //
 
         // Apply actual test(s)
-        // FIXME: command not parsed right! iterate from 1 and see
-        for test_line in 2 .. buffer.num_lines() {
-            expectation = COMMAND_CONTENT_LINE.to_string() +
+        for test_line in 1 .. buffer.num_lines() {
+            expectation = COMMAND_CONTENT_LINE_1.to_string() +
                 test_line.to_string().as_str();
             assert_eq!( *buffer.get_line_content( test_line ).unwrap(),
                     expectation );
@@ -691,8 +700,10 @@ mod tests {// {{{
     fn command_buffer_test_3() {// {{{
         // set contstants
         let test_num: u8 = 3;
+        let command_line_version: u8 = 1;
         //
-        let mut buffer = open_command_buffer_test( test_num );
+        let mut buffer = open_command_buffer_test( test_num,
+                                                   command_line_version );
         let mut expectation: String;
         //
 
@@ -702,7 +713,90 @@ mod tests {// {{{
             // NOTE: We don't iterate to num_lines+1 because the last line
             // is blank and won't match the expected value
             for test_line in 1 .. buffer.num_lines() {
-                expectation = COMMAND_CONTENT_LINE.to_string() +
+                expectation = COMMAND_CONTENT_LINE_1.to_string() +
+                    test_line.to_string().as_str();
+                match lines_iter.next() {
+                    Some( line ) => {
+                        assert_eq!( *line, expectation );
+                    },
+                    None => break,
+                }
+            }
+        }
+
+        //
+
+        // Common test close routine
+        close_file_buffer_test( &mut buffer );
+    }// }}}
+    /// Test get_line_content() with spaced, quoted lines
+    #[test]
+    fn command_buffer_test_4() {// {{{
+        // Common test start routine
+        // set contstants
+        let test_num: u8 = 4;
+        let test_line: usize = 2;
+        let command_line_version: u8 = 2;
+        //
+        let mut buffer = open_command_buffer_test( test_num,
+                                                   command_line_version );
+        let expectation =
+                COMMAND_CONTENT_LINE_2.to_string() +
+                test_line.to_string().as_str();
+        //
+
+        // Apply actual test(s)
+        assert_eq!( buffer.get_line_content( test_line ).unwrap(),
+                    &expectation );
+        //
+
+        // Common test close routine
+        close_command_buffer_test( &mut buffer );
+    }// }}}
+    /// Iterate over each line individually with spaced, quoted lines
+    #[test]
+    fn command_buffer_test_5() {// {{{
+        // Common test start routine
+        // set contstants
+        let test_num: u8 = 5;
+        let command_line_version: u8 = 2;
+        //
+        let mut buffer = open_command_buffer_test( test_num,
+                                                   command_line_version );
+        let mut expectation: String;
+        //
+
+        // Apply actual test(s)
+        for test_line in 1 .. buffer.num_lines() {
+            expectation = COMMAND_CONTENT_LINE_2.to_string() +
+                test_line.to_string().as_str();
+            assert_eq!( *buffer.get_line_content( test_line ).unwrap(),
+                    expectation );
+        }
+        //
+
+        // Common test close routine
+        close_command_buffer_test( &mut buffer );
+    }// }}}
+    /// Test lines_iterator() values with spaced, quoted lines
+    #[test]
+    fn command_buffer_test_6() {// {{{
+        // set contstants
+        let test_num: u8 = 6;
+        let command_line_version: u8 = 2;
+        //
+        let mut buffer = open_command_buffer_test( test_num,
+                                                   command_line_version );
+        let mut expectation: String;
+        //
+
+        // Apply actual test(s)
+        {
+            let mut lines_iter = buffer.lines_iterator();
+            // NOTE: We don't iterate to num_lines+1 because the last line
+            // is blank and won't match the expected value
+            for test_line in 1 .. buffer.num_lines() {
+                expectation = COMMAND_CONTENT_LINE_2.to_string() +
                     test_line.to_string().as_str();
                 match lines_iter.next() {
                     Some( line ) => {

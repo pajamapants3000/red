@@ -51,13 +51,13 @@ struct FileCoordinate {
 regex_search( needle: &str, from: FileCoordinate ) -> FileCoordinate {
 } */
 
-/// Opens file with user-specified name and mode {{{
+/// Opens file with user-specified name and mode 
 ///
 /// Uses global definitions of mode flags in this file
 ///
 /// Returns direct result of call to OpenOptions::new()
 /// This is of type Result<File, io::Error>
-pub fn file_opener( name: &str, mode: FileMode ) -> Result<File, RedError> {
+pub fn file_opener( name: &str, mode: FileMode ) -> Result<File, RedError> {// {{{
 
     // let's introduce OpenOptions now, though we don't need it
     // until we introduce more functionality
@@ -69,10 +69,9 @@ pub fn file_opener( name: &str, mode: FileMode ) -> Result<File, RedError> {
         .create(mode.f_create)
         .create_new(mode.f_create_new)
         .open( name ).map_err(|err| RedError::FileOpen( err ) )
-}
-//}}}
-
-pub fn command_output( _full_stdin: &str ) -> String {
+}// }}}
+/// The public interface - turn command input into output string
+pub fn command_output( _full_stdin: &str ) -> String {// {{{
     let command: String;
     let arguments: Vec<String>;
     match compose_command( _full_stdin ) {
@@ -87,10 +86,9 @@ pub fn command_output( _full_stdin: &str ) -> String {
     // convert to RedError type
     String::from_utf8( output_stdout )
                         .expect("Failed to get output")
-}
-
+}// }}}
 /// Turn command-line input into std::process::Command object
-fn compose_command( _full_stdin: &str ) -> ( String, Vec<String> ) {
+fn compose_command( _full_stdin: &str ) -> ( String, Vec<String> ) {// {{{
     let arguments: Vec<String>;
 
     match split_cmd_args( _full_stdin ) {
@@ -99,12 +97,13 @@ fn compose_command( _full_stdin: &str ) -> ( String, Vec<String> ) {
             ( cmd, arguments )
         },
     }
-}
-
-/// Pull executed program/command from beginning of input
+}// }}}
+/// Split-off executed program/command from beginning of input
 ///
-/// Splits input into "<command> <arguments>"
-fn split_cmd_args( _full_stdin: &str ) -> ( String, String ) {
+/// Splits input into "<command> <arguments>" string
+/// returns <command> and <arguments> as separate strings for
+/// further processing
+fn split_cmd_args( _full_stdin: &str ) -> ( String, String ) {// {{{
     let input = _full_stdin.trim();
     let mut arguments = String::new();
     let command: String;
@@ -124,10 +123,9 @@ fn split_cmd_args( _full_stdin: &str ) -> ( String, String ) {
         },
     }
     ( command, arguments )
-}
-
+}// }}}
 /// Convert string of arguments into vector
-fn split_args( stringed: &str ) -> Vec<String> {
+fn split_args( stringed: &str ) -> Vec<String> {// {{{
     let mut input = stringed.trim();
     let mut argument = String::new();
     let mut arguments: Vec<String> = Vec::new();
@@ -140,7 +138,7 @@ fn split_args( stringed: &str ) -> Vec<String> {
                     (zi, zf) => {
                             input = zf.trim();
                             argument = argument + zi.trim();
-                        if !is_quoted( input, x ) {
+                        if !is_quoted( stringed, x ) {
                             arguments.push( argument );
                             argument = String::new();
                         }
@@ -156,27 +154,24 @@ fn split_args( stringed: &str ) -> Vec<String> {
         }
     }
     arguments
-}
-
-/// return true if character is quoted according to BEGquot and ENDquot
+}// }}}
+/// return true if character is quoted according to quot, bra, and ket
 ///
-/// BEGquot and ENDquot are each a set of quote characters
-/// A character is quoted if, for some index i, it has
-/// [ num(BEGquot[i]) - num(ENDquot[i]) ] > 0 to the left
-/// [ num(ENDquot[i]) - num(BEGquot[i]) ] > 0 to the right
-/// BEGquot = [ "\"", "'", "`", "(", "[", "{" ]
-/// ENDquot = [ "\"", "'", "`", ")", "]", "}" ]
+/// quoted if preceded by odd number of "|'|`, or IMMEDIATELY preceded by
+/// odd number of backslashes; or preceded by unclosed, unquoted brackets;
+/// either (, [, or {.
 /// in some cases, we may want to include <>, but this should do it for
 /// the most part I think
-/// We also return true if indx immediately preceeded by odd number of
-/// backslashes
 /// XXX: What if the quoted string is not space-separated from the rest?
 /// TODO: Implementation is slow, inelegant, brute-force approach
 /// XXX: Do we really care about the right side? That's more a question of
 /// whether the user properly closed their quotes
 /// XXX: We ignore all parens if quoted, otherwise
 /// include them even if backslash-escaped
-fn is_quoted( text: &str, indx: usize ) -> bool {
+/// TODO: ? add escaped brackets as separate brackets, e.g. "(|[|{|\(|\[|\{"
+/// TODO: define bra, ket, and quot as global string or something and
+/// convert to vector in function?
+fn is_quoted( text: &str, indx: usize ) -> bool {// {{{
     let bra:  Vec<char> = vec!('(', '[', '{');
     let ket:  Vec<char> = vec!(')', ']', '}');
     let quot: Vec<char> = vec!('"', '\'', '`');
@@ -226,7 +221,7 @@ fn is_quoted( text: &str, indx: usize ) -> bool {
     }
     // sanity check
     for sum in &c_braket {
-        assert!( *sum >= 0 );    // all (unquoted) kets must follow a bra
+        assert!( *sum >= 0, "is_quoted: too many closing brackets" );
     }
     if c_quote == vec!( 0; c_quote.len() ) &&
             c_braket == vec!( 0; c_braket.len() ) {
@@ -234,7 +229,6 @@ fn is_quoted( text: &str, indx: usize ) -> bool {
     } else {
         true
     }
-}
+}// }}}
 // ^^^ Functions ^^^ }}}
-
 
