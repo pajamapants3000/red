@@ -24,6 +24,8 @@ pub enum RedError {
     SetLineOutOfBounds,
 //    ParseCommand,
     OpCharIndex,
+    AddressSyntax,
+    AddressMissing,
 }
 // ^^^ Data Structures ^^^ }}}
 
@@ -40,6 +42,8 @@ pub fn error_code( _error: RedError ) -> u32 {
         RedError::SetLineOutOfBounds => 290,
 //        RedError::ParseCommand => 300,
         RedError::OpCharIndex => 301,
+        RedError::AddressSyntax => 302,
+        RedError::AddressMissing => 303,
     }
 }
 //}}}

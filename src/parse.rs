@@ -10,8 +10,8 @@
  */
 
 // Bring in to namespace {{{
-use std::fs::File;
 use std::str::Bytes;
+use std::panic::catch_unwind;
 
 use error::*;
 use io::*;
@@ -47,15 +47,11 @@ pub fn parse_command<'a>( _cmd_input: &'a str, buffer: &Buffer )
     match _cmd_input.split_at( op_indx ) {
         (x, y) => {
             addrs = x;
-            _parameters = &y[2..];
+            _parameters = &y[1..];
         },
     }
-    match get_address_range( addrs, buffer ) {
-        ( x, y ) => {
-            _address_initial = x;
-            _address_final = y;
-        }
-    }
+    let ( _address_initial, _address_final ) = try!(
+            get_address_range( addrs, buffer ) );
 
     Ok( Command {
             address_initial: _address_initial,
@@ -69,15 +65,96 @@ pub fn parse_command<'a>( _cmd_input: &'a str, buffer: &Buffer )
 
 /// Identify address range {{{
 ///
-fn get_address_range( address_string: &str, buffer: &Buffer ) -> (usize, usize) {
-    // start with simple auto-return of ( 1u32, 2u32 )
-    ( 1_usize, 5_usize ) // for use with tests
-    /*
-    let address_initial: usize;
-    let address_final: usize;
-    */
-}
+/// What do we want to do if string ends in ',' or ';'?
+/// e.g. :13,25,p
+/// ?
+/// Should this print lines 13-25 or ignore 13 and just print 25?
+/// Probably want to ignore. or error?
+fn get_address_range( address_string: &str, buffer: &Buffer )// {{{
+            -> Result<(usize, usize), RedError> {
+    let (left, right) = parse_address_list( address_string );
+
+    Ok( ((try!(parse_address_field( left, buffer ))).unwrap(),
+            (try!(parse_address_field( right, buffer ))).unwrap()) )
+    
+}// }}}
 //}}}
+/// Test whether char is an address separator
+fn is_address_separator( ch: char ) -> bool {// {{{
+    ch == ',' || ch == ';'
+}// }}}
+/// Turn address list into two address expressions
+///
+/// Returns the latter-two non-empty elements in a list
+/// elements are separated according to is_address_separator()
+/// separators inside /.../ or ?...? are ignored using is_in_regex()
+fn parse_address_list( address_string: &str ) -> (&str, &str) {// {{{
+    let mut right: &str = address_string;
+    let mut left: &str = "";
+
+    loop {
+        match right.find( is_address_separator ) {
+            Some(indx) => {
+                if !is_in_regex( address_string, indx ) {
+                    match right.split_at( indx ) {
+                        (x, y) => {
+                            if x.len() > 0 {
+                                left = x;
+                            }
+                            right = &y[ 2 .. ];
+                        }
+                    }
+                }
+            }
+            None => {
+                return ( left, right );
+            },
+        }
+    }
+}// }}}
+/// Parse address field; convert regex or integer into line number
+fn parse_address_field( address: &str, buffer: &Buffer )
+            -> Result<Option<usize>, RedError> {
+    println!("address {:?}", address);
+    println!("slice1 {:?}", &address[0..address.len()-1]);
+    match catch_unwind(|| &address[0..1] ) {
+        Ok( ch ) => {
+            match ch {
+                "/" => {
+                    if &address[ address.len() - 1 .. ] != "/" {
+                        println!("unclosed");
+                        return Err( RedError::AddressSyntax );
+                    }
+                    println!("slice2 {:?}", &address[1..address.len()-1]);
+                    Ok( buffer.find_match(
+                            &address[1 .. address.len() - 1 ] ) )
+                }
+                "?" => {
+                    if &address[ address.len() - 1 .. ] != "?" {
+                        return Err( RedError::AddressSyntax );
+                    }
+                    Ok( buffer.find_match_reverse(
+                            &address[1 .. address.len()-1 ] ) )
+                }
+                _ => {
+                    match address.parse() {
+                        Ok(x) => {
+                            if x == 0 {
+                                Ok( Some( 1 ) )
+                            } else if x < buffer.num_lines() {
+                                Ok( Some(x) )
+                            } else {
+                                Ok( Some( buffer.num_lines() ) )
+                            }
+                        },
+                        _ => Err( RedError::AddressSyntax )
+                    }
+                }
+            }
+        },
+        Err( _ ) => Err( RedError::AddressMissing )
+    }
+}
 
 /// Find index of operation code in string
 ///
@@ -181,7 +258,6 @@ fn is_in_regex( text: &str, indx: usize ) -> bool {// {{{
     let mut c_regex: Vec<bool> = vec!( false; regex.len() );
     let mut c_indx: usize = 0;
     let mut escaped: bool = false;
-    let thechar = &text[indx..indx+1];  // debug
     //
     let (left, _) = text.split_at( indx );
     //
@@ -214,7 +290,58 @@ fn is_in_regex( text: &str, indx: usize ) -> bool {// {{{
 }// }}}
 #[cfg(test)]
 mod tests {
-    use super::{get_opchar_index, is_in_regex};
+    use super::{get_opchar_index, is_in_regex, parse_address_field, parse_address_list, get_address_range, is_address_separator};
+    use buf::*;
+
+    const COMMAND_CONTENT_LINE_1: &'static str = "testcmd";
+    const COMMAND_CONTENT_LINE_2: &'static str = "testcmda testcmdb";
+    const COMMAND_FILE_SUFFIX: &'static str = ".cmd";
+    const TEST_FILE: &'static str = "red_filetest";
+
+    /// Prep and return buffer for use in "command buffer" test functions
+    ///
+    /// uses test_lines function to create file with which buffer
+    /// is initialized
+    pub fn open_command_buffer_test( test_num: u8, command_line_version: u8 )// {{{
+            -> Buffer {
+        //
+        let num_lines: usize = 7;   // number of lines to have in buffer
+        let command_content_line = match command_line_version {
+            1_u8 => COMMAND_CONTENT_LINE_1,
+            2_u8 => COMMAND_CONTENT_LINE_2,
+            _ => "",
+        };
+        let test_file: String = TEST_FILE.to_string() +
+                COMMAND_FILE_SUFFIX + test_num.to_string().as_str();
+        let test_command = "echo -e ".to_string() +
+                                    &test_lines( command_content_line,
+                                    num_lines );
+        let mut buffer = Buffer::new( BufferInput::Command( test_command ));
+        buffer.set_file_name( &test_file );
+        buffer.set_current_line_number( 1 );
+        buffer
+    }// }}}
+    /// deconstruct buffer from "command buffer" test;
+    /// any other necessary closing actions
+    pub fn close_command_buffer_test( buffer: &mut Buffer ) {// {{{
+        buffer.destruct().unwrap();
+    }// }}}
+    // begin prep functions
+    /// Generate and return string containing lines for testing
+    ///
+    /// Takes string to use as base for text on each line
+    /// This string will have the line number appended
+    /// Also takes a single u8 integer, the number of lines to generate
+    fn test_lines( line_str: &str, num_lines: usize ) -> String {// {{{
+        let mut file_content = "".to_string();
+        let mut next: String;
+        for i in 1 .. ( num_lines + 1 ) {
+            next = line_str.to_string() + i.to_string().as_str();
+            next = next + r"\n";
+            file_content.push_str( &next );
+        }
+        file_content
+    }// }}}
 
     // Tests for parse::get_opchar_index
     /// No address given
@@ -334,5 +461,224 @@ mod tests {
         let indx = haystack.find( "mytest" ).unwrap();
         assert!( !is_in_regex( haystack, indx ) );
     }
-
+    #[test]
+    fn is_address_separator_test_1() {
+        let ch = ';';
+        assert!( is_address_separator( ch ) );
+    }
+    #[test]
+    fn is_address_separator_test_2() {
+        let ch = '.';
+        assert!( !is_address_separator( ch ) );
+    }
+    #[test]
+    fn is_address_separator_test_3() {
+        let ch = 'r';
+        assert!( !is_address_separator( ch ) );
+    }
+    #[test]
+    fn is_address_separator_test_4() {
+        let ch = ',';
+        assert!( is_address_separator( ch ) );
+    }
+    #[test]
+    fn get_address_range_test_1() {
+        // set contstants
+        let test_num: u8 = 1;
+        let command_line_version: u8 = 1;
+        //
+        let mut buffer = open_command_buffer_test( test_num,
+                                                   command_line_version );
+        let address_string: &str = "1, 3";
+        let ini_expected: usize = 1;
+        let fin_expected: usize = 3;
+        //
+        let ( ini, fin ) = get_address_range( address_string, &buffer ).unwrap();
+        assert_eq!( ini, ini_expected );
+        assert_eq!( fin, fin_expected );
+        // Common test close routine
+        close_command_buffer_test( &mut buffer );
+        
+    }
+    #[test]
+    fn get_address_range_test_2() {
+        // set contstants
+        let test_num: u8 = 2;
+        let command_line_version: u8 = 1;
+        //
+        let mut buffer = open_command_buffer_test( test_num,
+                                                   command_line_version );
+        let address_string: &str = "1, 56";
+        let ini_expected: usize = 1;
+        let fin_expected: usize = 8;
+        //
+        let ( ini, fin ) = get_address_range( address_string, &buffer ).unwrap();
+        assert_eq!( ini, ini_expected );
+        assert_eq!( fin, fin_expected );
+        // Common test close routine
+        close_command_buffer_test( &mut buffer );
+        
+    }
+    #[test]
+    fn get_address_range_test_3() {
+        // set contstants
+        let test_num: u8 = 3;
+        let command_line_version: u8 = 1;
+        //
+        let mut buffer = open_command_buffer_test( test_num,
+                                                   command_line_version );
+        let address_string: &str = "0, 4";
+        let ini_expected: usize = 1;
+        let fin_expected: usize = 4;
+        //
+        let ( ini, fin ) = get_address_range( address_string, &buffer ).unwrap();
+        assert_eq!( ini, ini_expected );
+        assert_eq!( fin, fin_expected );
+        // Common test close routine
+        close_command_buffer_test( &mut buffer );
+        
+    }
+    #[test]
+    fn get_address_range_test_4() {
+        // set contstants
+        let test_num: u8 = 4;
+        let command_line_version: u8 = 1;
+        //
+        let mut buffer = open_command_buffer_test( test_num,
+                                                   command_line_version );
+        let address_string: &str = "/testcmd1/, 5";
+        let ini_expected: usize = 1;
+        let fin_expected: usize = 5;
+        //
+        let ( ini, fin ) = get_address_range( address_string, &buffer ).unwrap();
+        assert_eq!( ini, ini_expected );
+        assert_eq!( fin, fin_expected );
+        // Common test close routine
+        close_command_buffer_test( &mut buffer );
+        
+    }
+    #[test]
+    fn parse_address_list_test_1() {
+        // set contstants
+        let address_string: &str = "1, 3";
+        let ini_expected: &str = "1";
+        let fin_expected: &str = "3";
+        //
+        let ( ini, fin ) = parse_address_list( address_string );
+        assert_eq!( ini, ini_expected );
+        assert_eq!( fin, fin_expected );
+        
+    }
+    #[test]
+    fn parse_address_list_test_2() {
+        // set contstants
+        let address_string: &str = "1, 56";
+        let ini_expected: &str = "1";
+        let fin_expected: &str = "56";
+        //
+        let ( ini, fin ) = parse_address_list( address_string );
+        assert_eq!( ini, ini_expected );
+        assert_eq!( fin, fin_expected );
+        
+    }
+    #[test]
+    fn parse_address_list_test_3() {
+        // set contstants
+        let address_string: &str = "0, 4";
+        let ini_expected: &str = "0";
+        let fin_expected: &str = "4";
+        //
+        let ( ini, fin ) = parse_address_list( address_string );
+        assert_eq!( ini, ini_expected );
+        assert_eq!( fin, fin_expected );
+        
+    }
+    #[test]
+    fn parse_address_list_test_4() {
+        // set contstants
+        let address_string: &str = "/testcmd3/, 5";
+        let ini_expected: &str = "/testcmd3/";
+        let fin_expected: &str = "5";
+        //
+        let ( ini, fin ) = parse_address_list( address_string );
+        assert_eq!( ini, ini_expected );
+        assert_eq!( fin, fin_expected );
+        
+    }
+    #[test]
+    fn parse_address_field_test_1() {
+        // set contstants
+        let test_num: u8 = 1;
+        let command_line_version: u8 = 1;
+        //
+        let mut buffer = open_command_buffer_test( test_num,
+                                                   command_line_version );
+        let address_string: &str = "1";
+        let expected: usize = 1;
+        //
+        let result = parse_address_field( address_string, &buffer )
+            .unwrap()
+            .unwrap();
+        assert_eq!( result, expected );
+        // Common test close routine
+        close_command_buffer_test( &mut buffer );
+        
+    }
+    #[test]
+    fn parse_address_field_test_2() {
+        // set contstants
+        let test_num: u8 = 2;
+        let command_line_version: u8 = 1;
+        //
+        let mut buffer = open_command_buffer_test( test_num,
+                                                   command_line_version );
+        let address_string: &str = "56";
+        let expected: usize = 8;
+        //
+        let result = parse_address_field( address_string, &buffer )
+            .unwrap()
+            .unwrap();
+        assert_eq!( result, expected );
+        // Common test close routine
+        close_command_buffer_test( &mut buffer );
+        
+    }
+    #[test]
+    fn parse_address_field_test_3() {
+        // set contstants
+        let test_num: u8 = 3;
+        let command_line_version: u8 = 1;
+        //
+        let mut buffer = open_command_buffer_test( test_num,
+                                                   command_line_version );
+        let address_string: &str = "0";
+        let expected: usize = 1;
+        //
+        let result = parse_address_field( address_string, &buffer )
+            .unwrap()
+            .unwrap();
+        assert_eq!( result, expected );
+        // Common test close routine
+        close_command_buffer_test( &mut buffer );
+        
+    }
+    #[test]
+    fn parse_address_field_test_4() {
+        // set contstants
+        let test_num: u8 = 4;
+        let command_line_version: u8 = 1;
+        //
+        let mut buffer = open_command_buffer_test( test_num,
+                                                   command_line_version );
+        let address_string: &str = "/testcmd3/";
+        let expected: usize = 3;
+        //
+        let result = parse_address_field( address_string, &buffer )
+            .unwrap()
+            .unwrap();
+        assert_eq!( result, expected );
+        // Common test close routine
+        close_command_buffer_test( &mut buffer );
+        
+    }
 }

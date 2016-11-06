@@ -195,6 +195,8 @@ impl Buffer {   //{{{
         Some(result)
     }// }}}
     /// Return iterator over lines in buffer
+    ///
+    /// works in reverse with next_back?
     pub fn lines_iterator( &self ) -> Iter<String> {// {{{
         let lines_ref: &LinkedList<String> = &self.lines;
         lines_ref.into_iter()
@@ -233,6 +235,13 @@ impl Buffer {   //{{{
     }// }}}
     pub fn get_current_line_number( &self ) -> usize {// {{{
         self.current_line
+    }// }}}
+    pub fn set_current_line_number( &mut self, line_number: usize ) {// {{{
+        if line_number < self.total_lines {
+            self.current_line = line_number;
+        } else {
+            self.current_line = self.total_lines;
+        }
     }// }}}
     pub fn get_marked_line( &self, label: char ) -> Option<usize> {// {{{
         for i in 0 .. self.markers.len() {
@@ -322,12 +331,33 @@ impl Buffer {   //{{{
     pub fn find_match( &self, regex: &str ) -> Option<usize> {// {{{
         let re = Regex::new( regex ).unwrap();
         let mut lines_iter = self.lines_iterator();
-        for _ in 0 .. self.current_line {
-            lines_iter.next();
+        for _ in 1 .. self.current_line {
+            lines_iter.next();              // start at current line
         }
         let mut index: usize = self.current_line;
         loop {
             match lines_iter.next() {
+                Some( line ) => {
+                    if re.is_match( line.as_str() ) {
+                        return Some( index );
+                    }
+                },
+                None => return None,
+            }
+            index += 1;
+        }
+        // not reached
+    }// }}}
+    /// Return number of previous matching line
+    pub fn find_match_reverse( &self, regex: &str ) -> Option<usize> {// {{{
+        let re = Regex::new( regex ).unwrap();
+        let mut lines_iter = self.lines_iterator();
+        for _ in 1 .. self.current_line {
+            lines_iter.next();              // start at current line
+        }
+        let mut index: usize = self.current_line;
+        loop {
+            match lines_iter.next_back() {
                 Some( line ) => {
                     if re.is_match( line.as_str() ) {
                         return Some( index );
@@ -461,7 +491,7 @@ mod tests {// {{{
     ///
     /// uses test_lines function to create file with which buffer
     /// is initialized
-    fn open_command_buffer_test( test_num: u8, command_line_version: u8 )// {{{
+    pub fn open_command_buffer_test( test_num: u8, command_line_version: u8 )// {{{
             -> Buffer {
         //
         let num_lines: usize = 7;   // number of lines to have in buffer
@@ -498,7 +528,7 @@ mod tests {// {{{
     }// }}}
     /// deconstruct buffer from "command buffer" test;
     /// any other necessary closing actions
-    fn close_command_buffer_test( buffer: &mut Buffer ) {// {{{
+    pub fn close_command_buffer_test( buffer: &mut Buffer ) {// {{{
         buffer.destruct().unwrap();
     }// }}}
     /*
