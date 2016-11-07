@@ -11,7 +11,7 @@
 
 // *** Bring in to namespace *** {{{
 use std::fs::{File, OpenOptions};
-use std::process::Command;
+use std::process::{Command, Output};
 
 use error::*;
 
@@ -80,8 +80,14 @@ pub fn command_output( _full_stdin: &str ) -> String {// {{{
             arguments = args;
         },
     }
-    let output = Command::new( &command ).args( &arguments )
-            .output().expect("command failed");
+    let output: Output;
+    if arguments[0].len() == 0 {
+        output = Command::new( &command )
+                .output().expect("command failed");
+    } else {
+        output = Command::new( &command ).args( &arguments )
+                .output().expect("command failed");
+    }
     let output_stdout = output.stdout;
     // convert to RedError type
     String::from_utf8( output_stdout )

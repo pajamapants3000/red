@@ -50,17 +50,31 @@ enum EditorMode {
 // *** Functions *** {{{
 
 fn main() {// {{{
+    let mut buffer: Buffer;
     // quick'n''dirty - will process one by one later; clap?
     let args: Vec<String> = env::args().collect();
 
     // take as direct arg; will later be arg to flag
-    let file_name = args[1].to_string();
-    let mut buffer = Buffer::new(BufferInput::File(file_name));
-
-    println!("file_name: {}", buffer.get_file_name().unwrap_or("") );
+    if args.len() > 1 {
+        let content = args[1].to_string();
+        if &content[0..1] == "@" {
+            buffer = Buffer::new(BufferInput::Command(content[1..].to_string()));
+        } else {
+            buffer = Buffer::new(BufferInput::File(content));
+        }
+    } else {
+        buffer = Buffer::new(BufferInput::None);
+        buffer.set_file_name( "untitled" );
+    }
+    // Print buffer content for testing
+    {
+        let lines = buffer.lines_iterator();
+        for line in lines {
+            println!( "{:?}", line );
+        }
+    }
 
     quit( &mut buffer )
-
 }// }}}
 
 /// Exit program

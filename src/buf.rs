@@ -111,6 +111,11 @@ impl Buffer {   //{{{
             last_write: get_null_time(),
             file: match content {
                 BufferInput::File( file_name ) => Some( file_name ),
+                BufferInput::Command( command ) => Some(
+                                        command.split_whitespace()
+                                        .next()
+                                        .unwrap_or("command_stdout")
+                                        .to_string() ),
                 _ => None,
             },
         };
