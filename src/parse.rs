@@ -26,13 +26,14 @@ pub struct Command<'a> {
     pub operation: char,
     pub parameters: &'a str,
 }
+
 // ^^^ Data Structures ^^^ }}}
 
 /// Parses command-mode input {{{
 ///
 /// This is the public interface to the parse module
 ///
-pub fn parse_command<'a>( _cmd_input: &'a str, buffer: &Buffer )
+pub fn parse_command<'a>( _cmd_input: &'a str, buffer: &Buffer )// {{{
         -> Result<Command<'a>, RedError> {
     // MUST initialize?
     let mut _address_initial: usize = 1;
@@ -60,7 +61,7 @@ pub fn parse_command<'a>( _cmd_input: &'a str, buffer: &Buffer )
             parameters: _parameters,
         }
     )
-}
+}// }}}
 //}}}
 
 /// Identify address range {{{
@@ -79,11 +80,12 @@ fn get_address_range( address_string: &str, buffer: &Buffer )// {{{
     
 }// }}}
 //}}}
-/// Test whether char is an address separator
+/// Test whether char is an address separator// {{{
 fn is_address_separator( ch: char ) -> bool {// {{{
     ch == ',' || ch == ';'
 }// }}}
-/// Turn address list into two address expressions
+// }}}
+/// Turn address list into two address expressions// {{{
 ///
 /// Returns the latter-two non-empty elements in a list
 /// elements are separated according to is_address_separator()
@@ -101,61 +103,60 @@ fn parse_address_list( address_string: &str ) -> (&str, &str) {// {{{
                             if x.len() > 0 {
                                 left = x;
                             }
-                            right = &y[ 2 .. ];
+                            right = &y[ 1 .. ];
                         }
                     }
                 }
             }
             None => {
+                if left.len() == 0 {
+                    left = right.clone();
+                }
                 return ( left, right );
             },
         }
     }
 }// }}}
-/// Parse address field; convert regex or integer into line number
-fn parse_address_field( address: &str, buffer: &Buffer )
+// }}}
+/// Parse address field; convert regex or integer into line number// {{{
+fn parse_address_field( address: &str, buffer: &Buffer )// {{{
             -> Result<Option<usize>, RedError> {
-    println!("address {:?}", address);
-    println!("slice1 {:?}", &address[0..address.len()-1]);
-    match catch_unwind(|| &address[0..1] ) {
-        Ok( ch ) => {
-            match ch {
-                "/" => {
-                    if &address[ address.len() - 1 .. ] != "/" {
-                        println!("unclosed");
-                        return Err( RedError::AddressSyntax );
-                    }
-                    println!("slice2 {:?}", &address[1..address.len()-1]);
-                    Ok( buffer.find_match(
-                            &address[1 .. address.len() - 1 ] ) )
+    if address.len() > 0 {
+        match &address[0..1] {
+            "/" => {
+                if &address[ address.len() - 1 .. ] != "/" {
+                    return Err( RedError::AddressSyntax );
                 }
-                "?" => {
-                    if &address[ address.len() - 1 .. ] != "?" {
-                        return Err( RedError::AddressSyntax );
-                    }
-                    Ok( buffer.find_match_reverse(
-                            &address[1 .. address.len()-1 ] ) )
+                Ok( buffer.find_match(
+                        &address[1 .. address.len() - 1 ] ) )
+            }
+            "?" => {
+                if &address[ address.len() - 1 .. ] != "?" {
+                    return Err( RedError::AddressSyntax );
                 }
-                _ => {
-                    match address.parse() {
-                        Ok(x) => {
-                            if x == 0 {
-                                Ok( Some( 1 ) )
-                            } else if x < buffer.num_lines() {
-                                Ok( Some(x) )
-                            } else {
-                                Ok( Some( buffer.num_lines() ) )
-                            }
-                        },
-                        _ => Err( RedError::AddressSyntax )
-                    }
+                Ok( buffer.find_match_reverse(
+                        &address[1 .. address.len()-1 ] ) )
+            }
+            _ => {
+                match address.parse() {
+                    Ok(x) => {
+                        if x == 0 {
+                            Ok( Some( 1 ) )
+                        } else if x < buffer.num_lines() {
+                            Ok( Some(x) )
+                        } else {
+                            Ok( Some( buffer.num_lines() ) )
+                        }
+                    },
+                    _ => Ok( Some( buffer.get_current_line_number() ) ),
                 }
             }
-        },
-        Err( _ ) => Err( RedError::AddressMissing )
+        }
+    } else {
+        Ok( Some( buffer.get_current_line_number() ) )
     }
-}
-
+}// }}}
+// }}}
 /// Find index of operation code in string
 ///
 /// Parses full command and finds the index of the operation character;
@@ -248,7 +249,7 @@ fn get_opchar_index( _cmd_input: &str ) -> Result<(usize, char), RedError> {
     }
     Result::Err( RedError::OpCharIndex )
 }
-/// Return true if index is contained in regex
+/// Return true if index is contained in regex// {{{
 ///
 /// Is regex if wrapped in /.../ or ?...? within larger string
 /// In some functions, we need to know this so we know how to treat the
@@ -281,13 +282,12 @@ fn is_in_regex( text: &str, indx: usize ) -> bool {// {{{
         c_indx += 1;
     }
     if c_regex == vec!( false; c_regex.len() ) {
-        println!("false");
         false
     } else {
-        println!("true");
         true
     }
 }// }}}
+// }}}
 #[cfg(test)]
 mod tests {
     use super::{get_opchar_index, is_in_regex, parse_address_field, parse_address_list, get_address_range, is_address_separator};

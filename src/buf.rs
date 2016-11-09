@@ -219,6 +219,30 @@ impl Buffer {   //{{{
     pub fn set_file_name( &mut self, file_name: &str ) {// {{{
         self.file = Some(file_name.to_string());
     }// }}}
+    /// Delete line
+    ///
+    /// TODO: Add error handling, Result<> return?
+    pub fn delete_line( &mut self, line_num: usize ) {
+        let mut back = self.lines.split_off( line_num );
+        back.pop_front();
+        self.lines.append( &mut back );
+    }
+    /// Insert new line at current position
+    ///
+    /// TODO: Add error handling, Result<> return?
+    pub fn insert_here( &mut self, new_line: &str ) {
+        let mut back = self.lines.split_off( self.current_line );
+        let line_num = self.current_line;
+        self.insert_line( line_num, new_line );
+    }
+    /// Insert new line
+    ///
+    /// TODO: Add error handling, Result<> return?
+    pub fn insert_line( &mut self, line_num: usize, new_line: &str ) {
+        let mut back = self.lines.split_off( line_num );
+        self.lines.push_back( new_line.to_string() );
+        self.lines.append( &mut back );
+    }
     /// Replace line with new string
     ///
     /// TODO: Add error handling; panics if line_num > len
@@ -347,22 +371,14 @@ impl Buffer {   //{{{
                         return Some( index );
                     }
                 },
-                None => return None,
+                None => break,
             }
             index += 1;
         }
-        // not reached
-    }// }}}
-    /// Return number of previous matching line
-    pub fn find_match_reverse( &self, regex: &str ) -> Option<usize> {// {{{
-        let re = Regex::new( regex ).unwrap();
+        index = 1;
         let mut lines_iter = self.lines_iterator();
-        for _ in 1 .. self.current_line {
-            lines_iter.next();              // start at current line
-        }
-        let mut index: usize = self.current_line;
-        loop {
-            match lines_iter.next_back() {
+        for _ in 0 .. self.current_line {
+            match lines_iter.next() {
                 Some( line ) => {
                     if re.is_match( line.as_str() ) {
                         return Some( index );
@@ -372,7 +388,41 @@ impl Buffer {   //{{{
             }
             index += 1;
         }
-        // not reached
+        None
+    }// }}}
+    /// Return number of previous matching line
+    pub fn find_match_reverse( &self, regex: &str ) -> Option<usize> {// {{{
+        let re = Regex::new( regex ).unwrap();
+        let mut lines_iter = self.lines_iterator();
+        for _ in self.current_line .. ( self.total_lines + 1 ) {
+            lines_iter.next_back();              // start at current line
+        }
+        let mut index: usize = self.current_line - 1;
+        loop {
+            match lines_iter.next_back() {
+                Some( line ) => {
+                    if re.is_match( line.as_str() ) {
+                        return Some( index );
+                    }
+                },
+                None => break,
+            }
+            index -= 1;
+        }
+        let mut lines_iter = self.lines_iterator();
+        let mut index: usize = self.total_lines;
+        for _ in self.current_line .. ( self.total_lines + 1 ) {
+            match lines_iter.next_back() {
+                Some( line ) => {
+                    if re.is_match( line.as_str() ) {
+                        return Some( index );
+                    }
+                },
+                None => return None,
+            }
+            index -= 1;
+        }
+        None
     }// }}}
     /// Deconstruct buffer
     pub fn destruct( &mut self ) -> Result<(), RedError> {// {{{

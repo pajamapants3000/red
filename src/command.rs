@@ -10,6 +10,10 @@
  */
 
 // *** Bring in to namespace *** {{{
+use buf::*;
+use error::*;
+use parse::*;
+use io::*;
 // ^^^ Bring in to namespace ^^^ }}}
 
 // *** Attributes *** {{{
@@ -34,11 +38,19 @@
 /// if println! panics, which happens if it fails to write
 /// to io::stdout()
 ///
-print( buffer: &Buffer, address_i: usize, address_f: usize )
-        -> Result<(), RedError> {
-    for indx in address_i .. address_f {
+pub fn print( buffer: &mut Buffer, address_i: usize, address_f: usize,
+              parms: &str ) -> Result<(), RedError> {
+    {   // XXX: just some random use of parms for now
+        if parms == "heading" {
+            println!( "here's a heading" );
+            return Err( RedError::OpCharIndex );
+        }
+    }
+    for indx in address_i .. ( address_f + 1 ) {
         println!("{}", buffer.get_line_content( indx ).unwrap() );
     }
+    buffer.set_current_line_number( address_f );
+    Ok( () )
 }
 // ^^^ Functions ^^^ }}}
 

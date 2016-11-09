@@ -12,6 +12,9 @@
 // *** Bring in to namespace *** {{{
 use std::fs::{File, OpenOptions};
 use std::process::{Command, Output};
+use std::io::{self, BufRead, Write};
+
+use regex::Regex;
 
 use error::*;
 
@@ -21,9 +24,9 @@ use error::*;
 // ^^^ Attributes ^^^ }}}
 //
 // *** Constants *** {{{
+const PROMPT: &'static str = "%";
+const CONTINUE: &'static str = ">";
 //const LINE_CONT: &'static str = "\\\n";
-//const PROMPT: &'static str = "%";
-//const PROMPT_CONT: &'static str = ">";
 // ^^^ Constants ^^^ }}}
 //
 // *** Data Structures *** {{{
@@ -70,6 +73,53 @@ pub fn file_opener( name: &str, mode: FileMode ) -> Result<File, RedError> {// {
         .create_new(mode.f_create_new)
         .open( name ).map_err(|err| RedError::FileOpen( err ) )
 }// }}}
+/// Get input from stdin// {{{
+///
+/// Collects input differently depending on current mode
+/// In Command mode, collects lines until it reaches an end-of-line that
+/// is not backslash-escaped (not a continuation)
+/// In Insert and Replace modes, collects lines until a line with a single
+/// dot (or period) is detected.
+/// In View mode, collects single characters for controlling view output
+///     e.g. j,k for scrolling down, up
+///
+pub fn get_input( mut input_buffer: String ) -> String {// {{{
+    let stdin = io::stdin();
+    let stdout = io::stdout();
+    let mut stdin_handle = stdin.lock();
+    let mut stdout_handle = stdout.lock();
+    let mut prompt = PROMPT;
+
+    lazy_static! {
+        static ref RE: Regex = Regex::new( r#".*\\"# )
+            .expect("get_input: failed to compile regex");
+    }
+
+    loop {
+        // pop continuation backslash; assert that's what we get;
+        match input_buffer.pop() {
+            Some(x) => {
+                assert_eq!( x, '\\' );
+            }
+            None => {},
+        }
+        stdout_handle.write( prompt.as_bytes() ).unwrap();
+        stdout_handle.flush().unwrap();
+        stdin_handle.read_line( &mut input_buffer ).unwrap();
+
+        match input_buffer.pop() {
+            Some(x) => assert_eq!( x, '\n' ),
+            None => {},
+        }
+        if !RE.is_match( &mut input_buffer ) {
+            break;
+        }
+        prompt = CONTINUE;
+    }
+
+    input_buffer
+}// }}}
+// }}}
 /// The public interface - turn command input into output string
 pub fn command_output( _full_stdin: &str ) -> String {// {{{
     let command: String;
