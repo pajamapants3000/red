@@ -31,11 +31,10 @@ mod buf;
 mod command;
 
 use std::env;
-use std::collections::hash_map::{HashMap, Entry};
 
 use parse::*;
 use buf::*;
-use error::*;
+//use error::*;
 use io::*;
 use command::Operations;
 
@@ -43,11 +42,17 @@ use command::Operations;
 
 // }}}
 // *** Constants *** {{{
+const DEFAULT_MODE: EditorMode = EditorMode::Command;
+const DEFAULT_HELP: bool = false;
 // ^^^ Constants ^^^ }}}
 // *** Data Structures *** {{{
-enum EditorMode {
+pub struct EditorState {
+    mode: EditorMode,
+    help: bool,
+}
+pub enum EditorMode {
     Command,
-    Insert  { address: usize },
+    Insert,
 //    Replace { line: usize },
 //    View,
 }
@@ -56,13 +61,13 @@ enum EditorMode {
 // *** Functions *** {{{
 fn main() {// {{{
     let mut buffer: Buffer;
-    let mut mode: EditorMode = EditorMode::Command;
+    // initialize editor state
+    let mut state = EditorState { mode: DEFAULT_MODE, help: DEFAULT_HELP };
+    // Construct operations hashmap
+    let operations = Operations::new();
     // quick'n''dirty - will process one by one later; clap?
     // No! Invocation for this program is very simple: manual processing
     let args: Vec<String> = env::args().collect();
-
-    // Construct operations hashmap
-    let operations = Operations::new();
 
     // take as direct arg; will later be arg to flag
     if args.len() > 1 {
@@ -86,24 +91,47 @@ fn main() {// {{{
     */
 
     let mut input: String = String::new();
-    loop {
-        input = get_input( input );
-        match mode {
-            EditorMode::Command => {
-                let command = parse_command( &input, &buffer )
-                        .expect("main: failed to parse command");
-                operations.execute( &mut buffer, command );
-            }// {{{
-            EditorMode::Insert { address: x } => {
-            }
-        }
+    loop {                          // loop until user calls quit operation
         input.clear();
+        input = get_input( input, &state );
+        match state.mode {
+            EditorMode::Command => {
+                let command: Command;
+                match parse_command( &input, &buffer, &state ) {
+                    Ok(x) => {
+                        command = x;
+                    }
+                    Err(e) => {
+                        print_help( &state, &format!( "main: {:?}", e ));
+                        continue;
+                    },
+                }
+                let opchar = command.operation;
+                match operations.execute( &mut buffer, &mut state, command ) {
+                    Ok( () ) => {},
+                    Err(_) => {
+                        print_help( &state,
+                            &format!( "operation failed: {}", opchar ));
+                    },
+                }
+            },
+            EditorMode::Insert => {
+                if input == ".".to_string() {
+                    state.mode = EditorMode::Command;
+                } else {
+                    buffer.insert_here( &input );
+                    state.mode = EditorMode::Insert;
+                }
+            },
+        }
     }
+}// }}}
 
-    let quit_command = Command { address_initial: 0, address_final: 0,
-            operation: 'q', parameters: "" };
-    operations.execute( &mut buffer, quit_command );
-
+/// Print help, warnings, other output depending on setting
+pub fn print_help( state: &EditorState, output: &str ) {// {{{
+    if state.help {
+        println!( "{}", output );
+    }
 }// }}}
 
 // ^^^ Functions ^^^ }}}

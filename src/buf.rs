@@ -11,7 +11,7 @@
 
 // Use LineWriter instead of, or in addition to, BufWriter?
 use std::io::prelude::*;
-use std::io::{BufReader, BufWriter, Error, stdin};
+use std::io::{BufReader, BufWriter, stdin};
 use std::fs::{self, File, copy, rename};
 use std::path::Path;
 use std::collections::LinkedList;
@@ -24,6 +24,7 @@ use ::rand::{thread_rng, Rng};
 
 use io::*;
 use error::*;
+use ::{EditorState, print_help};
 
 // ^^^ Bring in to namespace ^^^ }}}
 // *** Attributes *** {{{
@@ -52,6 +53,7 @@ pub struct Marker {// {{{
 }// }}}
 // }}}
 /// Specific line, character index in buffer// {{{
+/// XXX: Delete? I don't think I need this
 pub struct Cursor {// {{{
     line: Option<usize>,
     indx: Option<usize>,
@@ -243,7 +245,6 @@ impl Buffer {   //{{{
     ///
     /// TODO: Add error handling, Result<> return?
     pub fn insert_here( &mut self, new_line: &str ) {// {{{
-        let mut back = self.lines.split_off( self.current_line );
         let line_num = self.current_line;
         self.insert_line( line_num, new_line );
     }// }}}
@@ -252,9 +253,10 @@ impl Buffer {   //{{{
     ///
     /// TODO: Add error handling, Result<> return?
     pub fn insert_line( &mut self, line_num: usize, new_line: &str ) {// {{{
-        let mut back = self.lines.split_off( line_num );
+        let mut back = self.lines.split_off( line_num - 1 );
         self.lines.push_back( new_line.to_string() );
         self.lines.append( &mut back );
+        self.set_current_line_number( line_num + 1 );
     }// }}}
 // }}}
     /// Replace line with new string// {{{
@@ -263,7 +265,7 @@ impl Buffer {   //{{{
     pub fn set_line_content( &mut self, line_num: usize, new_line: &str )// {{{
             -> Result<(), RedError> {
         if line_num > self.lines.len() {
-            return Err(RedError::SetLineOutOfBounds);
+            return Err( RedError::SetLineOutOfBounds );
         }
         let mut back_list = self.lines.split_off( line_num - 1 );
         let _ = back_list.pop_front();

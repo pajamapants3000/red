@@ -17,6 +17,7 @@ use std::io::{self, BufRead, Write};
 use regex::Regex;
 
 use error::*;
+use ::{EditorState, EditorMode, print_help};
 
 // ^^^ Bring in to namespace ^^^ }}}
 //
@@ -24,8 +25,9 @@ use error::*;
 // ^^^ Attributes ^^^ }}}
 //
 // *** Constants *** {{{
-const PROMPT: &'static str = "%";
-const CONTINUE: &'static str = ">";
+const PROMPT_COMMAND: &'static str = "%";
+const PROMPT_CONTINUE: &'static str = ">";
+const PROMPT_INSERT: &'static str = "!";
 //const LINE_CONT: &'static str = "\\\n";
 // ^^^ Constants ^^^ }}}
 //
@@ -83,12 +85,18 @@ pub fn file_opener( name: &str, mode: FileMode ) -> Result<File, RedError> {// {
 /// In View mode, collects single characters for controlling view output
 ///     e.g. j,k for scrolling down, up
 ///
-pub fn get_input( mut input_buffer: String ) -> String {// {{{
+pub fn get_input( mut input_buffer: String, state: &EditorState )
+            -> String {// {{{
     let stdin = io::stdin();
     let stdout = io::stdout();
     let mut stdin_handle = stdin.lock();
     let mut stdout_handle = stdout.lock();
-    let mut prompt = PROMPT;
+    let mut prompt: &str;
+    
+    match state.mode {
+        EditorMode::Command => prompt = PROMPT_COMMAND,
+        EditorMode::Insert  => prompt = PROMPT_INSERT,
+    }
 
     lazy_static! {
         static ref RE: Regex = Regex::new( r#".*\\"# )
@@ -114,7 +122,7 @@ pub fn get_input( mut input_buffer: String ) -> String {// {{{
         if !RE.is_match( &mut input_buffer ) {
             break;
         }
-        prompt = CONTINUE;
+        prompt = PROMPT_CONTINUE;
     }
 
     input_buffer

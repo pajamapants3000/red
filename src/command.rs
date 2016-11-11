@@ -10,17 +10,17 @@
  */
 
 // *** Bring in to namespace *** {{{
-use std::collections::hash_map::{HashMap, Entry};
+use std::collections::hash_map::HashMap;
 use std::process::exit;
 
 use buf::*;
 use error::*;
 use parse::*;
-use io::*;
+use ::{EditorState, EditorMode, print_help};
 // ^^^ Bring in to namespace ^^^ }}}
 
 // *** Attributes *** {{{
-const num_operations: usize = 32;
+const NUM_OPERATIONS: usize = 32;
 // ^^^ Attributes ^^^ }}}
 
 // *** Constants *** {{{
@@ -28,15 +28,15 @@ const num_operations: usize = 32;
 
 // *** Data Structures *** {{{
 pub struct Operations {
-    operation_map: HashMap<char, Box<Fn( &mut Buffer, Command )
-            -> Result<(), RedError>> >,
+    operation_map: HashMap<char, Box<Fn( &mut Buffer, &mut EditorState,
+                                         Command ) -> Result<(), RedError>> >,
 }
 impl Operations {// {{{
     /// Creates Operations HashMap// {{{
     pub fn new() -> Operations {// {{{
-        let mut _operation_map: HashMap<char, Box<Fn( &mut Buffer, Command )
-                -> Result<(), RedError>> > = HashMap::with_capacity(
-                    num_operations );
+        let mut _operation_map: HashMap<char, Box<Fn( &mut Buffer,
+              &mut EditorState, Command ) -> Result<(), RedError>> > =
+            HashMap::with_capacity( NUM_OPERATIONS );
         _operation_map.insert( 'a', Box::new(append) );
         _operation_map.insert( 'c', Box::new(change) );
         _operation_map.insert( 'd', Box::new(delete) );
@@ -68,13 +68,13 @@ impl Operations {// {{{
     }// }}}
 // }}}
     /// Execute command// {{{
-    pub fn execute( &self, buffer: &mut Buffer, command: Command )
-            -> Result<(), RedError> {// {{{
+    pub fn execute( &self, buffer: &mut Buffer, state: &mut EditorState,//{{{
+                    command: Command ) -> Result<(), RedError> {
         match self.operation_map.contains_key( &command.operation ) {
             true => {
                 let op_to_execute = self.operation_map
                     .get( &command.operation ).unwrap();
-                op_to_execute( buffer, command )
+                op_to_execute( buffer, state, command )
             },
             false => {
                 Err( RedError::InvalidOperation{ operation: command.operation } )
@@ -86,13 +86,31 @@ impl Operations {// {{{
 // ^^^ Data Structures ^^^ }}}
 
 // *** Functions *** {{{
+/// Avoid `unused` warnings for functions that don't modify mode// {{{
+fn mode_noop( mode: &mut EditorMode ) -> EditorMode {// {{{
+    match mode {
+        &mut EditorMode::Command => EditorMode::Command,
+        &mut EditorMode::Insert => EditorMode::Insert,
+    }
+}// }}}
+// }}}
+/// Avoid `unused` warnings for functions that don't modify buffer// {{{
+fn buffer_noop( buffer: &mut Buffer ) -> &mut Buffer {// {{{
+    let temp = buffer.get_current_line_number();
+    buffer.set_current_line_number( temp );
+    buffer
+}// }}}
+// }}}
 /// A simple placeholder function for unimplemented features// {{{
-fn placeholder( buffer: &mut Buffer, command: Command)// {{{
-    -> Result<(), RedError> {
-    println!( "Operation not yet implemented: {}", command.operation );
+fn placeholder( buffer: &mut Buffer, state: &mut EditorState,//{{{
+                command: Command) -> Result<(), RedError> {
+    print_help( state, &format!(
+            "Operation not yet implemented: {}", command.operation ));
+    state.mode = mode_noop( &mut state.mode );
     match buffer.get_file_name() {
         Some( file_name ) => {
-            println!( "Continuing work on {}", file_name );
+            print_help( state, &format!(
+                    "Continuing work on {}", file_name ));
             return Err(
                 RedError::InvalidOperation{ operation: command.operation } );
         }
@@ -101,72 +119,82 @@ fn placeholder( buffer: &mut Buffer, command: Command)// {{{
                 RedError::InvalidOperation{ operation: command.operation } );
         }
     }
-    Ok( () )    // not reached
 }// }}}
 // }}}
-fn append( buffer: &mut Buffer, command: Command )
+fn append( buffer: &mut Buffer, state: &mut EditorState, command: Command )
         -> Result<(), RedError> {// {{{
-    placeholder( buffer, command )
+    assert_eq!( 'a', command.operation );
+    buffer.set_current_line_number( command.address_final + 1 );
+    state.mode = EditorMode::Insert;
+    Ok( () )
 }//}}}
-fn change( buffer: &mut Buffer, command: Command )
+fn change( buffer: &mut Buffer, state: &mut EditorState, command: Command )
         -> Result<(), RedError> {// {{{
-    placeholder( buffer, command )
+    placeholder( buffer, state, command )
 }//}}}
-fn delete( buffer: &mut Buffer, command: Command )
+fn delete( buffer: &mut Buffer, state: &mut EditorState, command: Command )
         -> Result<(), RedError> {// {{{
-    placeholder( buffer, command )
+    placeholder( buffer, state, command )
 }//}}}
-fn edit( buffer: &mut Buffer, command: Command )
+fn edit( buffer: &mut Buffer, state: &mut EditorState, command: Command )
         -> Result<(), RedError> {// {{{
-    placeholder( buffer, command )
+    placeholder( buffer, state, command )
 }//}}}
-fn edit_unsafe( buffer: &mut Buffer, command: Command )
+fn edit_unsafe( buffer: &mut Buffer, state: &mut EditorState, command: Command )
         -> Result<(), RedError> {// {{{
-    placeholder( buffer, command )
+    placeholder( buffer, state, command )
 }//}}}
-fn filename( buffer: &mut Buffer, command: Command )
+fn filename( buffer: &mut Buffer, state: &mut EditorState, command: Command )
         -> Result<(), RedError> {// {{{
-    placeholder( buffer, command )
+    placeholder( buffer, state, command )
 }//}}}
-fn global( buffer: &mut Buffer, command: Command )
+fn global( buffer: &mut Buffer, state: &mut EditorState, command: Command )
         -> Result<(), RedError> {// {{{
-    placeholder( buffer, command )
+    placeholder( buffer, state, command )
 }//}}}
-fn global_interactive( buffer: &mut Buffer, command: Command )
-        -> Result<(), RedError> {// {{{
-    placeholder( buffer, command )
+fn global_interactive( buffer: &mut Buffer, state: &mut EditorState,//{{{
+                       command: Command ) -> Result<(), RedError> {
+    placeholder( buffer, state, command )
 }//}}}
-fn help_recall( buffer: &mut Buffer, command: Command )
+fn help_recall( buffer: &mut Buffer, state: &mut EditorState, command: Command )
         -> Result<(), RedError> {// {{{
-    placeholder( buffer, command )
+    placeholder( buffer, state, command )
 }//}}}
-fn help_tgl( buffer: &mut Buffer, command: Command )
+fn help_tgl( buffer: &mut Buffer, state: &mut EditorState, command: Command )
         -> Result<(), RedError> {// {{{
-    placeholder( buffer, command )
+    assert_eq!( 'H', command.operation );
+    state.help = !state.help;
+    println!("help output set to {:?}", match state.help {
+        true => "on",
+        false => "off", });
+    Ok( () )
 }//}}}
-fn insert( buffer: &mut Buffer, command: Command )
+fn insert( buffer: &mut Buffer, state: &mut EditorState, command: Command )
         -> Result<(), RedError> {// {{{
-    placeholder( buffer, command )
+    assert_eq!( 'i', command.operation );
+    buffer.set_current_line_number( command.address_final );
+    state.mode = EditorMode::Insert;
+    Ok( () )
 }//}}}
-fn join( buffer: &mut Buffer, command: Command )
+fn join( buffer: &mut Buffer, state: &mut EditorState, command: Command )
         -> Result<(), RedError> {// {{{
-    placeholder( buffer, command )
+    placeholder( buffer, state, command )
 }//}}}
-fn mark( buffer: &mut Buffer, command: Command )
+fn mark( buffer: &mut Buffer, state: &mut EditorState, command: Command )
         -> Result<(), RedError> {// {{{
-    placeholder( buffer, command )
+    placeholder( buffer, state, command )
 }//}}}
-fn lines_list( buffer: &mut Buffer, command: Command )
+fn lines_list( buffer: &mut Buffer, state: &mut EditorState, command: Command )
         -> Result<(), RedError> {// {{{
-    placeholder( buffer, command )
+    placeholder( buffer, state, command )
 }//}}}
-fn move_lines( buffer: &mut Buffer, command: Command )
+fn move_lines( buffer: &mut Buffer, state: &mut EditorState, command: Command )
         -> Result<(), RedError> {// {{{
-    placeholder( buffer, command )
+    placeholder( buffer, state, command )
 }//}}}
-fn print_numbered( buffer: &mut Buffer, command: Command )
-        -> Result<(), RedError> {// {{{
-    placeholder( buffer, command )
+fn print_numbered( buffer: &mut Buffer, state: &mut EditorState,//{{{
+                   command: Command ) -> Result<(), RedError> {
+    placeholder( buffer, state, command )
 }//}}}
 /// Display range of lines of buffer in terminal // {{{
 ///
@@ -180,7 +208,7 @@ fn print_numbered( buffer: &mut Buffer, command: Command )
 /// if println! panics, which happens if it fails to write
 /// to io::stdout()
 ///
-fn print( buffer: &mut Buffer, command: Command )//{{{
+fn print( buffer: &mut Buffer, state: &mut EditorState, command: Command )//{{{
             -> Result<(), RedError> {
     {   // XXX: just some random use of parms for now
         if command.parameters == "heading" {
@@ -192,6 +220,8 @@ fn print( buffer: &mut Buffer, command: Command )//{{{
         println!("{}", buffer.get_line_content( indx ).unwrap() );
     }
     buffer.set_current_line_number( command.address_final );
+    // TODO: Drop this? Or Keep to avoid unused warnings?
+    state.mode = EditorMode::Command;
     Ok( () )
 }// }}}
 // }}}
@@ -200,49 +230,54 @@ fn print( buffer: &mut Buffer, command: Command )//{{{
 /// Make sure all buffers have been saved
 ///
 /// Delete all temprary storage
-fn quit( buffer: &mut Buffer, command: Command ) -> Result<(), RedError> {// {{{
+fn quit( buffer: &mut Buffer, state: &mut EditorState, command: Command )//{{{
+            -> Result<(), RedError> {
     if command.parameters == "!" && buffer.is_modified() {
         println!("file changed since last write");
     }
+    // TODO: Drop this? Or Keep to avoid unused warnings?
+    state.mode = EditorMode::Command;
     match buffer.destruct() {
         Ok( _ ) => exit( error_code( RedError::Quit ) as i32),
         Err( _ ) => exit( error_code( RedError::NoDestruct ) as i32),
     }
 }// }}}
 //}}}
-fn read( buffer: &mut Buffer, command: Command )
+fn read( buffer: &mut Buffer, state: &mut EditorState, command: Command )
         -> Result<(), RedError> {// {{{
-    placeholder( buffer, command )
+    placeholder( buffer, state, command )
 }//}}}
-fn substitute( buffer: &mut Buffer, command: Command )
+fn substitute( buffer: &mut Buffer, state: &mut EditorState, command: Command )
         -> Result<(), RedError> {// {{{
-    placeholder( buffer, command )
+    placeholder( buffer, state, command )
 }//}}}
-fn transfer( buffer: &mut Buffer, command: Command )
+fn transfer( buffer: &mut Buffer, state: &mut EditorState, command: Command )
         -> Result<(), RedError> {// {{{
-    placeholder( buffer, command )
+    placeholder( buffer, state, command )
 }//}}}
-fn undo( buffer: &mut Buffer, command: Command )
+fn undo( buffer: &mut Buffer, state: &mut EditorState, command: Command )
         -> Result<(), RedError> {// {{{
-    placeholder( buffer, command )
+    placeholder( buffer, state, command )
 }//}}}
-fn global_reverse( buffer: &mut Buffer, command: Command )
-        -> Result<(), RedError> {// {{{
-    placeholder( buffer, command )
+fn global_reverse( buffer: &mut Buffer, state: &mut EditorState,//{{{
+                   command: Command ) -> Result<(), RedError> {
+    placeholder( buffer, state, command )
 }//}}}
-fn global_reverse_interactive( buffer: &mut Buffer, command: Command )
-        -> Result<(), RedError> {// {{{
-    placeholder( buffer, command )
+fn global_reverse_interactive( buffer: &mut Buffer, state: &mut EditorState,//{{{
+                               command: Command ) -> Result<(), RedError> {
+    placeholder( buffer, state, command )
 }//}}}
 /// Write buffer to file// {{{
-fn write_to_disk( buffer: &mut Buffer, command: Command )// {{{
-        -> Result<(), RedError> {
+fn write_to_disk( buffer: &mut Buffer, state: &mut EditorState,//{{{
+                  command: Command ) -> Result<(), RedError> {
+    // TODO: Drop this? Or Keep to avoid unused warnings?
+    state.mode = EditorMode::Command;
     buffer.write_to_disk( command.parameters )
 }// }}}
 // }}}
-fn append_to_disk( buffer: &mut Buffer, command: Command )
-        -> Result<(), RedError> {// {{{
-    placeholder( buffer, command )
+fn append_to_disk( buffer: &mut Buffer, state: &mut EditorState,//{{{
+                   command: Command ) -> Result<(), RedError> {
+    placeholder( buffer, state, command )
 }//}}}
 
 // ^^^ Functions ^^^ }}}

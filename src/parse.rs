@@ -11,11 +11,11 @@
 
 // Bring in to namespace {{{
 use std::str::Bytes;
-use std::panic::catch_unwind;
 
 use error::*;
 use io::*;
 use buf::*;
+use ::{EditorState, EditorMode, print_help};
 
 // }}}
 
@@ -33,7 +33,8 @@ pub struct Command<'a> {
 ///
 /// This is the public interface to the parse module
 ///
-pub fn parse_command<'a>( _cmd_input: &'a str, buffer: &Buffer )// {{{
+pub fn parse_command<'a>( _cmd_input: &'a str, buffer: &Buffer,// {{{
+                          state: &EditorState )
         -> Result<Command<'a>, RedError> {
     // MUST initialize?
     let mut _address_initial: usize = 1;
@@ -42,25 +43,37 @@ pub fn parse_command<'a>( _cmd_input: &'a str, buffer: &Buffer )// {{{
     let _parameters: &str;
     let addrs: &str;
 
-    let ( op_indx, _operation ) = get_opchar_index( _cmd_input )
-            .expect( "parse_command: unable to determine opchar" );
-
-    match _cmd_input.split_at( op_indx ) {
-        (x, y) => {
-            addrs = x;
-            _parameters = &y[1..];
+    match state.mode {
+        EditorMode::Insert => {
+            Err( RedError::CriticalError(
+                    "parse_command: executing command while in input mode!"
+                    .to_string() ))
         },
-    }
-    let ( _address_initial, _address_final ) = try!(
-            get_address_range( addrs, buffer ) );
+        EditorMode::Command => {
+            let ( op_indx, _operation ) =
+                    match get_opchar_index( _cmd_input ) {
+                        Ok( x ) => x,
+                        Err( e ) => return Err(e),
+                    };
 
-    Ok( Command {
-            address_initial: _address_initial,
-            address_final: _address_final,
-            operation: _operation,
-            parameters: _parameters,
+            match _cmd_input.split_at( op_indx ) {
+                (x, y) => {
+                    addrs = x;
+                    _parameters = &y[1..];
+                },
+            }
+            let ( _address_initial, _address_final ) = try!(
+                    get_address_range( addrs, buffer ) );
+
+            Ok( Command {
+                    address_initial: _address_initial,
+                    address_final: _address_final,
+                    operation: _operation,
+                    parameters: _parameters,
+                }
+            )
         }
-    )
+    }
 }// }}}
 //}}}
 
