@@ -20,12 +20,15 @@ pub enum RedError {
     FileRename(io::Error),
     FileWrite(io::Error),
     FileRemove(io::Error),
+    FileCopy(io::Error),
 //    FileClose(io::Error),
     SetLineOutOfBounds,
 //    ParseCommand,
     OpCharIndex,
     AddressSyntax,
-    AddressMissing,
+    InvalidOperation{ operation: char },
+    NoDestruct,
+    Quit,
 }
 // ^^^ Data Structures ^^^ }}}
 
@@ -38,12 +41,15 @@ pub fn error_code( _error: RedError ) -> u32 {
         RedError::FileRename(_) => 281,
         RedError::FileWrite(_) => 282,
         RedError::FileRemove(_) => 283,
-//        RedError::FileClose(_) => 284,
+        RedError::FileCopy(_) => 284,
+//        RedError::FileClose(_) => 285,
         RedError::SetLineOutOfBounds => 290,
 //        RedError::ParseCommand => 300,
         RedError::OpCharIndex => 301,
         RedError::AddressSyntax => 302,
-        RedError::AddressMissing => 303,
+        RedError::InvalidOperation{ operation: _ } => 303,
+        RedError::NoDestruct => 304,
+        RedError::Quit => 0,
     }
 }
 //}}}

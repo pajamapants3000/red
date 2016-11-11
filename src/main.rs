@@ -1,4 +1,4 @@
-/*
+/*)
  * File   : main.rs
  * Purpose: reimplementation of the classic `ed` in Rust
  * Program: red
@@ -31,12 +31,13 @@ mod buf;
 mod command;
 
 use std::env;
+use std::collections::hash_map::{HashMap, Entry};
 
 use parse::*;
 use buf::*;
 use error::*;
 use io::*;
-use command::*;
+use command::Operations;
 
 //use io::FileMode;
 
@@ -53,12 +54,15 @@ enum EditorMode {
 // ^^^ Data Structures ^^^ }}}
 
 // *** Functions *** {{{
-
 fn main() {// {{{
     let mut buffer: Buffer;
     let mut mode: EditorMode = EditorMode::Command;
     // quick'n''dirty - will process one by one later; clap?
+    // No! Invocation for this program is very simple: manual processing
     let args: Vec<String> = env::args().collect();
+
+    // Construct operations hashmap
+    let operations = Operations::new();
 
     // take as direct arg; will later be arg to flag
     if args.len() > 1 {
@@ -88,45 +92,21 @@ fn main() {// {{{
             EditorMode::Command => {
                 let command = parse_command( &input, &buffer )
                         .expect("main: failed to parse command");
-                execute( &mut buffer, command );
-            }
+                operations.execute( &mut buffer, command );
+            }// {{{
             EditorMode::Insert { address: x } => {
             }
         }
         input.clear();
     }
 
-    quit( &mut buffer )
-}// }}}
+    let quit_command = Command { address_initial: 0, address_final: 0,
+            operation: 'q', parameters: "" };
+    operations.execute( &mut buffer, quit_command );
 
-/// Execute command
-fn execute( buffer: &mut Buffer, command: Command ) {// {{{
-    match command.operation {
-        'p' => {
-            print( buffer, command.address_initial, command.address_final,
-                      command.parameters )
-        }
-        'q' => {
-            Ok( quit( buffer ) )
-        }
-        _ => Ok( () ),
-    };
 }// }}}
-/// Exit program
-///
-/// Make sure all buffers have been saved
-/// Delete all temprary storage
-fn quit( buffer: &mut Buffer ) {
-    if buffer.is_modified() {
-        println!("file changed since last write");
-    }
-    buffer.destruct().expect("Failed to deconstruct buffer");
-    std::process::exit( error::error_code(
-            error::RedError::SetLineOutOfBounds ) as i32);
-}
 
 // ^^^ Functions ^^^ }}}
-
 #[cfg(test)]
 mod tests {
 

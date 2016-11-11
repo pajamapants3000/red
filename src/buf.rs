@@ -7,7 +7,6 @@
  * License: MIT; See LICENSE!
  * Notes  : Notes on successful compilation
  * Created: 10/26/2016 */
-#![allow(dead_code)]
 // *** Bring in to namespace *** {{{
 
 // Use LineWriter instead of, or in addition to, BufWriter?
@@ -34,7 +33,7 @@ use error::*;
 // ^^^ Constants ^^^ }}}
 
 // *** Data Structures *** {{{
-/// Type of input for starting buffer
+/// Type of input for starting buffer// {{{
 ///
 /// File - read from existing file
 /// Command - read output of specified command
@@ -44,18 +43,21 @@ pub enum BufferInput {// {{{
     Command(String),    // OsString? box it?
     None,
 }// }}}
-/// Single assignment of a marker to a line
+// }}}
+/// Single assignment of a marker to a line// {{{
 ///
 pub struct Marker {// {{{
     label: char,
     line: usize,
 }// }}}
-/// Specific line, character index in buffer
+// }}}
+/// Specific line, character index in buffer// {{{
 pub struct Cursor {// {{{
     line: Option<usize>,
     indx: Option<usize>,
 }// }}}
-/// Stores collection of lines containing current working text
+// }}}
+/// Stores collection of lines containing current working text// {{{
 ///
 pub struct Buffer {     //{{{
     /// the current working buffer content as a list of lines
@@ -83,8 +85,9 @@ pub struct Buffer {     //{{{
     /// Date and time of last write to disk under permanent file name
     last_write: DateTime<UTC>,
 }   //}}}
+// }}}
 impl Buffer {   //{{{
-    /// Initialize new Buffer instance
+    /// Initialize new Buffer instance// {{{
     pub fn new( content: BufferInput )     //{{{
             -> Buffer {
         let mut _lines = Buffer::init_lines( &content );
@@ -128,17 +131,20 @@ impl Buffer {   //{{{
         }
         result
     }   //}}}
-    /// Return total number of lines in buffer
+// }}}
+    /// Return total number of lines in buffer// {{{
     pub fn num_lines( &self ) -> usize {// {{{
         self.total_lines
     }// }}}
-    /// Return true if buffer modified since last write
+// }}}
+    /// Return true if buffer modified since last write// {{{
     pub fn is_modified( &self ) -> bool {// {{{
         self._is_modified
     }// }}}
+// }}}
     // later, change approach to homogenize file/stdout source
     // generate iterator over BufRead object, either file, stdout, or empty
-    /// Return the linked-list of lines to store in buffer
+    /// Return the linked-list of lines to store in buffer// {{{
     fn init_lines( content: &BufferInput ) -> LinkedList<String> {// {{{
         match *content {
             BufferInput::File( ref file_name ) => {
@@ -177,7 +183,8 @@ impl Buffer {   //{{{
             },
         }
     }// }}}
-    /// Return single line
+// }}}
+    /// Return single line// {{{
     ///
     /// change to Result instead of Option?
     pub fn get_line_content( &self, line: usize ) -> Option<&str> {// {{{
@@ -199,51 +206,58 @@ impl Buffer {   //{{{
         }
         Some(result)
     }// }}}
-    /// Return iterator over lines in buffer
+// }}}
+    /// Return iterator over lines in buffer// {{{
     ///
     /// works in reverse with next_back?
     pub fn lines_iterator( &self ) -> Iter<String> {// {{{
         let lines_ref: &LinkedList<String> = &self.lines;
         lines_ref.into_iter()
     }// }}}
-    /// Return reference to working file name string
+// }}}
+    /// Return reference to working file name string// {{{
     pub fn get_file_name( &self ) -> Option<&str> {// {{{
         match &self.file {
             &Some( ref file_name ) => Some( &file_name ),
             &None => None,
         }
     }// }}}
-    /// Set new working file name
+// }}}
+    /// Set new working file name// {{{
     ///
     /// At some point, need to test for existing file and ask user if overwrite
     pub fn set_file_name( &mut self, file_name: &str ) {// {{{
         self.file = Some(file_name.to_string());
     }// }}}
-    /// Delete line
+// }}}
+    /// Delete line// {{{
     ///
     /// TODO: Add error handling, Result<> return?
-    pub fn delete_line( &mut self, line_num: usize ) {
+    pub fn delete_line( &mut self, line_num: usize ) {// {{{
         let mut back = self.lines.split_off( line_num );
         back.pop_front();
         self.lines.append( &mut back );
-    }
-    /// Insert new line at current position
+    }// }}}
+// }}}
+    /// Insert new line at current position// {{{
     ///
     /// TODO: Add error handling, Result<> return?
-    pub fn insert_here( &mut self, new_line: &str ) {
+    pub fn insert_here( &mut self, new_line: &str ) {// {{{
         let mut back = self.lines.split_off( self.current_line );
         let line_num = self.current_line;
         self.insert_line( line_num, new_line );
-    }
-    /// Insert new line
+    }// }}}
+// }}}
+    /// Insert new line// {{{
     ///
     /// TODO: Add error handling, Result<> return?
-    pub fn insert_line( &mut self, line_num: usize, new_line: &str ) {
+    pub fn insert_line( &mut self, line_num: usize, new_line: &str ) {// {{{
         let mut back = self.lines.split_off( line_num );
         self.lines.push_back( new_line.to_string() );
         self.lines.append( &mut back );
-    }
-    /// Replace line with new string
+    }// }}}
+// }}}
+    /// Replace line with new string// {{{
     ///
     /// TODO: Add error handling; panics if line_num > len
     pub fn set_line_content( &mut self, line_num: usize, new_line: &str )// {{{
@@ -257,14 +271,19 @@ impl Buffer {   //{{{
         self.lines.append( &mut back_list );
         Ok( () )
     }// }}}
-    /// Return mutable iterator over lines in buffer
+// }}}
+    /// Return mutable iterator over lines in buffer// {{{
     pub fn mut_lines_iterator( &mut self ) -> IterMut<String> {// {{{
         let mut lines_ref: &mut LinkedList<String> = &mut self.lines;
         lines_ref.into_iter()
     }// }}}
+// }}}
+    /// Return current working line number// {{{
     pub fn get_current_line_number( &self ) -> usize {// {{{
         self.current_line
     }// }}}
+// }}}
+    /// Move "cursor" to new line// {{{
     pub fn set_current_line_number( &mut self, line_number: usize ) {// {{{
         if line_number < self.total_lines {
             self.current_line = line_number;
@@ -272,6 +291,8 @@ impl Buffer {   //{{{
             self.current_line = self.total_lines;
         }
     }// }}}
+// }}}
+    /// Return number of line with a specified mark set// {{{
     pub fn get_marked_line( &self, label: char ) -> Option<usize> {// {{{
         for i in 0 .. self.markers.len() {
             if self.markers[i].label == label {
@@ -280,21 +301,25 @@ impl Buffer {   //{{{
         }
         None
     }// }}}
-    /// Add new line marker
+// }}}
+    /// Add new line marker// {{{
     ///
     /// TODO: need exception handling? What can happen? Just out of space I think
     pub fn set_marker( &mut self, _line: usize, _label: char ) {// {{{
         self.markers.push( Marker{ label: _label, line: _line } );
     }// }}}
-    /// Return immutable slice over all markers
+// }}}
+    /// Return immutable slice over all markers// {{{
     pub fn list_markers( &self ) -> &[ Marker ] {// {{{
         self.markers.as_slice()
     }// }}}
-    /// Return mutable slice over all markers
+// }}}
+    /// Return mutable slice over all markers// {{{
     pub fn list_markers_mut( &mut self ) -> &mut [ Marker ] {// {{{
         self.markers.as_mut_slice()
     }// }}}
-    /// Write buffer contents to temp file
+// }}}
+    /// Write buffer contents to temp file// {{{
     ///
     /// TODO: Delete on buffer destruct or at least on program exit
     pub fn store_buffer( &mut self ) -> Result<(), RedError> {// {{{
@@ -308,43 +333,57 @@ impl Buffer {   //{{{
             loop {
                 match _lines_iterator.next() {
                     Some(x) => {
-                        writer.write( x.as_bytes() )
-                                .expect( "failed to write to disk" );
+                        try!( writer.write( x.as_bytes() )
+                                .map_err( |e| RedError::FileWrite(e) ) );
                     },
                     None => break,
                 }
-                writer.write( b"\n" ).expect( "failed to write to disk" );
+                try!( writer.write( b"\n" )
+                      .map_err( |e| RedError::FileWrite(e) ));
             }
         }
-        writer.flush().expect( "failed to write to disk" );
+        try!( writer.flush().map_err( |e| RedError::FileWrite(e) ));
         let new_buffer_file = match &self.file {
             &Some(ref x) => temp_file_name( Some( x.as_str() ) ),
             &None => temp_file_name( None ),
         };
         try!( rename( &self.buffer_file, &new_buffer_file )
-              .map_err(|err| RedError::FileRename( err ) )
+              .map_err(|e| RedError::FileRename(e) )
             );
         self.buffer_file = new_buffer_file;
         Ok( () )
     }// }}}
-    /// Save work to permanent file
+// }}}
+    /// Save work to permanent file// {{{
     ///
     /// TODO: move to io.rs? I don't think so, it's a part of the
     /// functionality of the buffer
     /// TODO: set up default filename?
-    pub fn write_to_disk( &mut self ) -> Result<(), Error> {// {{{
-        self.store_buffer().expect( "failed to write to disk" );
-        match &self.file {
-            &Some(ref x) => {
-                try!( copy( &self.buffer_file, x ) );
-            },
-            &None => {
-                println!("No file name chosen for save");
-            },
+    /// # Panics
+    /// # Errors
+    /// # Safety
+    /// # Examples
+    pub fn write_to_disk( &mut self, file_name: &str )// {{{
+            -> Result<(), RedError> {
+        try!( self.store_buffer() );
+        if file_name.len() == 0 {
+            match &self.file {
+                &Some(ref x) => {
+                    try!( copy( &self.buffer_file, x )
+                          .map_err( RedError::FileCopy ) );
+                },
+                &None => {
+                    println!("No file name chosen for save");
+                },
+            }
+        } else {
+            try!( copy( &self.buffer_file, file_name )
+                          .map_err( RedError::FileCopy ) );
         }
         Ok( () )
     }// }}}
-    /// Determine whether line matches regex
+// }}}
+    /// Determine whether line matches regex// {{{
     ///
     /// Do NOT use for search over multiple lines - will be very inefficient!
     /// Use find_match instead
@@ -356,7 +395,8 @@ impl Buffer {   //{{{
             None => false
         }
     }// }}}
-    /// Return number of next matching line
+// }}}
+    /// Return number of next matching line// {{{
     pub fn find_match( &self, regex: &str ) -> Option<usize> {// {{{
         let re = Regex::new( regex ).unwrap();
         let mut lines_iter = self.lines_iterator();
@@ -390,7 +430,8 @@ impl Buffer {   //{{{
         }
         None
     }// }}}
-    /// Return number of previous matching line
+// }}}
+    /// Return number of previous matching line// {{{
     pub fn find_match_reverse( &self, regex: &str ) -> Option<usize> {// {{{
         let re = Regex::new( regex ).unwrap();
         let mut lines_iter = self.lines_iterator();
@@ -424,7 +465,8 @@ impl Buffer {   //{{{
         }
         None
     }// }}}
-    /// Deconstruct buffer
+// }}}
+    /// Deconstruct buffer// {{{
     pub fn destruct( &mut self ) -> Result<(), RedError> {// {{{
         let _stdin = stdin();
         if self.is_modified() {
@@ -434,37 +476,50 @@ impl Buffer {   //{{{
             _stdin_handle.read_to_string( &mut response )
                 .expect("Failed to read user input");
             match response.to_lowercase().as_str() {
-                "y" | "yes" => { try!( self.write_to_disk()
-                                  .map_err(|err| RedError::FileWrite( err ) )
-                                  ); },
+                "y" | "yes" => { try!( self.write_to_disk( "" ) ); },
                 _ => (),
-            };
+            }
         }
         fs::remove_file( &self.buffer_file )
             .expect("Failed to delete buffer file");
         self.lines.clear();
         Ok( () )
     }// }}}
+// }}}
 }   //}}}
 
 // ^^^ Data Structures ^^^ }}}
 
 // *** Functions *** {{{
-
-/// Get timestamp to use for buffer filename
+/// Get timestamp to use for buffer filename// {{{
+///
+/// # Panics
+/// # Errors
+/// # Safety
+/// # Examples
 fn get_timestamp() -> String {// {{{
     let dt = UTC::now();
     dt.format("%Y%m%d%H%M%S").to_string()
 
 }// }}}
-
-/// Get DateTime to use as Null value
+// }}}
+/// Get DateTime to use as Null value// {{{
+///
+/// # Panics
+/// # Errors
+/// # Safety
+/// # Examples
 fn get_null_time() -> datetime::DateTime<UTC> {// {{{
     let utc_instance: UTC = UTC {};
     utc_instance.timestamp( 0, 0 )
 }// }}}
-
-/// Produce name for temporary buffer storage
+// }}}
+/// Produce name for temporary buffer storage// {{{
+///
+/// # Panics
+/// # Errors
+/// # Safety
+/// # Examples
 fn temp_file_name( file_name: Option<&str> ) -> String {// {{{
     // only way to conflict is by choosing the same eight alphanumeric
     // characters in less than a second!
@@ -477,7 +532,7 @@ fn temp_file_name( file_name: Option<&str> ) -> String {// {{{
             "." + &get_timestamp(),
     }
 }// }}}
-
+// }}}
 // ^^^ Functions ^^^ }}}
 
 #[cfg(test)]
@@ -492,7 +547,6 @@ mod tests {// {{{
     use error::*;
     use io::*;
     //  ^^^     ^^^     Bring into namespace    ^^^     ^^^ //// }}}
-
     //  ***     ***     Constants   ***     ***     //// {{{
     const TEST_FILE: &'static str = "red_filetest";
     const FILE_CONTENT_LINE: &'static str = "testfile";
@@ -501,9 +555,8 @@ mod tests {// {{{
     const FILE_FILE_SUFFIX: &'static str = ".file";
     const COMMAND_FILE_SUFFIX: &'static str = ".cmd";
     //  ^^^     ^^^     Constants   ^^^     ^^^     //// }}}
-
-    // begin prep functions
-    /// Generate and return string containing lines for testing
+    // begin prep functions// {{{
+    /// Generate and return string containing lines for testing// {{{
     ///
     /// Takes string to use as base for text on each line
     /// This string will have the line number appended
@@ -518,8 +571,8 @@ mod tests {// {{{
         }
         file_content
     }// }}}
-
-    /// Prep and return buffer for use in "file buffer" test functions
+// }}}
+    /// Prep and return buffer for use in "file buffer" test functions// {{{
     ///
     /// uses test_lines function to create file with which buffer
     /// is initialized
@@ -542,7 +595,8 @@ mod tests {// {{{
         // create new buffer from this file
         Buffer::new( BufferInput::File( test_file ) )
     }// }}}
-    /// Prep and return buffer for use in "command buffer" test functions
+// }}}
+    /// Prep and return buffer for use in "command buffer" test functions// {{{
     ///
     /// uses test_lines function to create file with which buffer
     /// is initialized
@@ -564,11 +618,13 @@ mod tests {// {{{
         buffer.set_file_name( &test_file );
         buffer
     }// }}}
-    /// Prep and return buffer for use in "empty buffer" test functions
+// }}}
+    /// Prep and return buffer for use in "empty buffer" test functions// {{{
     fn open_empty_buffer_test() -> Buffer {// {{{
         Buffer::new( BufferInput::None )
     }// }}}
-    /// deconstruct buffer from "file buffer" test
+// }}}
+    /// deconstruct buffer from "file buffer" test// {{{
     /// any other necessary closing actions
     fn close_file_buffer_test( buffer: &mut Buffer ) {// {{{
         match fs::remove_file( buffer.get_file_name()
@@ -581,22 +637,16 @@ mod tests {// {{{
             }
         buffer.destruct().unwrap();
     }// }}}
-    /// deconstruct buffer from "command buffer" test;
+// }}}
+    /// deconstruct buffer from "command buffer" test;// {{{
     /// any other necessary closing actions
     pub fn close_command_buffer_test( buffer: &mut Buffer ) {// {{{
         buffer.destruct().unwrap();
     }// }}}
-    /*
-    /// deconstruct buffer from "empty buffer" test
-    /// any other necessary closing actions
-    fn close_empty_buffer_test( buffer: &mut Buffer ) {// {{{
-        buffer.destruct().unwrap();
-    }// }}}
-    */
-    // end prep functions
-
-    // begin test functions// {{{
-    /// read line from buffer
+// }}}
+    // end prep functions// }}}
+    // begin test functions {{{
+    /// read line from buffer// {{{
     #[test]
     fn file_buffer_test_1() {// {{{
         // Common test start routine
@@ -617,7 +667,8 @@ mod tests {// {{{
         // Common test close routine
         close_file_buffer_test( &mut buffer );
     }// }}}
-    /// Test get_line_content() values
+// }}}
+    /// Test get_line_content() values// {{{
     #[test]
     fn file_buffer_test_2() {// {{{
         // set contstants
@@ -644,7 +695,8 @@ mod tests {// {{{
         // Common test close routine
         close_file_buffer_test( &mut buffer );
     }// }}}
-    /// Test lines_iterator() values
+// }}}
+    /// Test lines_iterator() values// {{{
     #[test]
     fn file_buffer_test_3() {// {{{
         // set contstants
@@ -676,7 +728,8 @@ mod tests {// {{{
         // Common test close routine
         close_file_buffer_test( &mut buffer );
     }// }}}
-    /// Test get_file_name() and set_file_name() functions
+// }}}
+    /// Test get_file_name() and set_file_name() functions// {{{
     #[test]
     fn file_buffer_test_4() {// {{{
         // set contstants
@@ -702,7 +755,8 @@ mod tests {// {{{
         // Common test close routine
         close_file_buffer_test( &mut buffer );
     }// }}}
-    /// Test modifying buffer
+// }}}
+    /// Test modifying buffer// {{{
     #[test]
     fn file_buffer_test_5() {// {{{
         // set contstants
@@ -731,7 +785,8 @@ mod tests {// {{{
         // Common test close routine
         close_file_buffer_test( &mut buffer );
     }// }}}
-    /// Read and compare/test a single line from "command buffer"
+// }}}
+    /// Read and compare/test a single line from "command buffer"// {{{
     #[test]
     fn command_buffer_test_1() {// {{{
         // Common test start routine
@@ -755,7 +810,8 @@ mod tests {// {{{
         // Common test close routine
         close_command_buffer_test( &mut buffer );
     }// }}}
-    /// Read and compare/test a single line from "command buffer"
+// }}}
+    /// Read and compare/test a single line from "command buffer"// {{{
     #[test]
     fn command_buffer_test_2() {// {{{
         // Common test start routine
@@ -780,7 +836,8 @@ mod tests {// {{{
         // Common test close routine
         close_command_buffer_test( &mut buffer );
     }// }}}
-    /// Test lines_iterator() values
+// }}}
+    /// Test lines_iterator() values// {{{
     #[test]
     fn command_buffer_test_3() {// {{{
         // set contstants
@@ -814,7 +871,8 @@ mod tests {// {{{
         // Common test close routine
         close_file_buffer_test( &mut buffer );
     }// }}}
-    /// Test get_line_content() with spaced, quoted lines
+// }}}
+    /// Test get_line_content() with spaced, quoted lines// {{{
     #[test]
     fn command_buffer_test_4() {// {{{
         // Common test start routine
@@ -838,7 +896,8 @@ mod tests {// {{{
         // Common test close routine
         close_command_buffer_test( &mut buffer );
     }// }}}
-    /// Iterate over each line individually with spaced, quoted lines
+// }}}
+    /// Iterate over each line individually with spaced, quoted lines// {{{
     #[test]
     fn command_buffer_test_5() {// {{{
         // Common test start routine
@@ -863,7 +922,8 @@ mod tests {// {{{
         // Common test close routine
         close_command_buffer_test( &mut buffer );
     }// }}}
-    /// Test lines_iterator() values with spaced, quoted lines
+// }}}
+    /// Test lines_iterator() values with spaced, quoted lines// {{{
     #[test]
     fn command_buffer_test_6() {// {{{
         // set contstants
@@ -897,13 +957,13 @@ mod tests {// {{{
         // Common test close routine
         close_file_buffer_test( &mut buffer );
     }// }}}
+// }}}
     /*
     #[test]
     fn empty_buffer_test() {// {{{
         let buffer = open_empty_buffer_test();
     }// }}}
-    */// }}}
-    // end test functions
-
+    */
+    // end test functions }}}
 }// }}}
 
