@@ -131,6 +131,8 @@ fn main() {// {{{
 pub fn print_help( state: &EditorState, output: &str ) {// {{{
     if state.help {
         println!( "{}", output );
+    } else {
+        println!( "?" );
     }
 }// }}}
 

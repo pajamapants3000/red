@@ -253,7 +253,7 @@ impl Buffer {   //{{{
     ///
     /// TODO: Add error handling, Result<> return?
     pub fn insert_line( &mut self, line_num: usize, new_line: &str ) {// {{{
-        let mut back = self.lines.split_off( line_num - 1 );
+        let mut back = self.lines.split_off( line_num );
         self.lines.push_back( new_line.to_string() );
         self.lines.append( &mut back );
         self.set_current_line_number( line_num + 1 );
@@ -529,8 +529,8 @@ fn temp_file_name( file_name: Option<&str> ) -> String {// {{{
                                 .gen_ascii_chars().take(8).collect();
     match file_name {
         Some(x) => ".red.".to_string() + x +
-                ".temp." + random_string.as_str() + "." + &get_timestamp(),
-        None => ".red.temp.".to_string() + random_string.as_str() +
+                random_string.as_str() + "." + &get_timestamp(),
+        None => ".red.".to_string() + random_string.as_str() +
             "." + &get_timestamp(),
     }
 }// }}}

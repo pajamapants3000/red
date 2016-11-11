@@ -124,40 +124,49 @@ fn placeholder( buffer: &mut Buffer, state: &mut EditorState,//{{{
 fn append( buffer: &mut Buffer, state: &mut EditorState, command: Command )
         -> Result<(), RedError> {// {{{
     assert_eq!( 'a', command.operation );
-    buffer.set_current_line_number( command.address_final + 1 );
+    // append is the default/natural line-insert behavior
+    buffer.set_current_line_number( command.address_final );
     state.mode = EditorMode::Insert;
     Ok( () )
 }//}}}
 fn change( buffer: &mut Buffer, state: &mut EditorState, command: Command )
         -> Result<(), RedError> {// {{{
+    assert_eq!( 'c', command.operation );
     placeholder( buffer, state, command )
 }//}}}
 fn delete( buffer: &mut Buffer, state: &mut EditorState, command: Command )
         -> Result<(), RedError> {// {{{
+    assert_eq!( 'd', command.operation );
     placeholder( buffer, state, command )
 }//}}}
 fn edit( buffer: &mut Buffer, state: &mut EditorState, command: Command )
         -> Result<(), RedError> {// {{{
+    assert_eq!( 'e', command.operation );
     placeholder( buffer, state, command )
 }//}}}
 fn edit_unsafe( buffer: &mut Buffer, state: &mut EditorState, command: Command )
         -> Result<(), RedError> {// {{{
+    assert_eq!( 'E', command.operation );
     placeholder( buffer, state, command )
 }//}}}
 fn filename( buffer: &mut Buffer, state: &mut EditorState, command: Command )
         -> Result<(), RedError> {// {{{
+    assert_eq!( 'f', command.operation );
     placeholder( buffer, state, command )
 }//}}}
 fn global( buffer: &mut Buffer, state: &mut EditorState, command: Command )
         -> Result<(), RedError> {// {{{
+    assert_eq!( 'g', command.operation );
     placeholder( buffer, state, command )
 }//}}}
 fn global_interactive( buffer: &mut Buffer, state: &mut EditorState,//{{{
                        command: Command ) -> Result<(), RedError> {
+    assert_eq!( 'G', command.operation );
     placeholder( buffer, state, command )
 }//}}}
 fn help_recall( buffer: &mut Buffer, state: &mut EditorState, command: Command )
         -> Result<(), RedError> {// {{{
+    assert_eq!( 'h', command.operation );
     placeholder( buffer, state, command )
 }//}}}
 fn help_tgl( buffer: &mut Buffer, state: &mut EditorState, command: Command )
@@ -172,28 +181,34 @@ fn help_tgl( buffer: &mut Buffer, state: &mut EditorState, command: Command )
 fn insert( buffer: &mut Buffer, state: &mut EditorState, command: Command )
         -> Result<(), RedError> {// {{{
     assert_eq!( 'i', command.operation );
-    buffer.set_current_line_number( command.address_final );
+    // append is the default/natural line-insert behavior
+    buffer.set_current_line_number( command.address_final - 1 );
     state.mode = EditorMode::Insert;
     Ok( () )
 }//}}}
 fn join( buffer: &mut Buffer, state: &mut EditorState, command: Command )
         -> Result<(), RedError> {// {{{
+    assert_eq!( 'j', command.operation );
     placeholder( buffer, state, command )
 }//}}}
 fn mark( buffer: &mut Buffer, state: &mut EditorState, command: Command )
         -> Result<(), RedError> {// {{{
+    assert_eq!( 'm', command.operation );
     placeholder( buffer, state, command )
 }//}}}
 fn lines_list( buffer: &mut Buffer, state: &mut EditorState, command: Command )
         -> Result<(), RedError> {// {{{
+    assert_eq!( 'l', command.operation );
     placeholder( buffer, state, command )
 }//}}}
 fn move_lines( buffer: &mut Buffer, state: &mut EditorState, command: Command )
         -> Result<(), RedError> {// {{{
+    assert_eq!( 'm', command.operation );
     placeholder( buffer, state, command )
 }//}}}
 fn print_numbered( buffer: &mut Buffer, state: &mut EditorState,//{{{
                    command: Command ) -> Result<(), RedError> {
+    assert_eq!( 'n', command.operation );
     placeholder( buffer, state, command )
 }//}}}
 /// Display range of lines of buffer in terminal // {{{
@@ -210,6 +225,7 @@ fn print_numbered( buffer: &mut Buffer, state: &mut EditorState,//{{{
 ///
 fn print( buffer: &mut Buffer, state: &mut EditorState, command: Command )//{{{
             -> Result<(), RedError> {
+    assert_eq!( 'p', command.operation );
     {   // XXX: just some random use of parms for now
         if command.parameters == "heading" {
             println!( "here's a heading" );
@@ -232,6 +248,7 @@ fn print( buffer: &mut Buffer, state: &mut EditorState, command: Command )//{{{
 /// Delete all temprary storage
 fn quit( buffer: &mut Buffer, state: &mut EditorState, command: Command )//{{{
             -> Result<(), RedError> {
+    assert_eq!( 'q', command.operation );
     if command.parameters == "!" && buffer.is_modified() {
         println!("file changed since last write");
     }
@@ -245,31 +262,38 @@ fn quit( buffer: &mut Buffer, state: &mut EditorState, command: Command )//{{{
 //}}}
 fn read( buffer: &mut Buffer, state: &mut EditorState, command: Command )
         -> Result<(), RedError> {// {{{
+    assert_eq!( 'r', command.operation );
     placeholder( buffer, state, command )
 }//}}}
 fn substitute( buffer: &mut Buffer, state: &mut EditorState, command: Command )
         -> Result<(), RedError> {// {{{
+    assert_eq!( 's', command.operation );
     placeholder( buffer, state, command )
 }//}}}
 fn transfer( buffer: &mut Buffer, state: &mut EditorState, command: Command )
         -> Result<(), RedError> {// {{{
+    assert_eq!( 't', command.operation );
     placeholder( buffer, state, command )
 }//}}}
 fn undo( buffer: &mut Buffer, state: &mut EditorState, command: Command )
         -> Result<(), RedError> {// {{{
+    assert_eq!( 'u', command.operation );
     placeholder( buffer, state, command )
 }//}}}
 fn global_reverse( buffer: &mut Buffer, state: &mut EditorState,//{{{
                    command: Command ) -> Result<(), RedError> {
+    assert_eq!( 'v', command.operation );
     placeholder( buffer, state, command )
 }//}}}
 fn global_reverse_interactive( buffer: &mut Buffer, state: &mut EditorState,//{{{
                                command: Command ) -> Result<(), RedError> {
+    assert_eq!( 'V', command.operation );
     placeholder( buffer, state, command )
 }//}}}
 /// Write buffer to file// {{{
 fn write_to_disk( buffer: &mut Buffer, state: &mut EditorState,//{{{
                   command: Command ) -> Result<(), RedError> {
+    assert_eq!( 'w', command.operation );
     // TODO: Drop this? Or Keep to avoid unused warnings?
     state.mode = EditorMode::Command;
     buffer.write_to_disk( command.parameters )
@@ -277,6 +301,7 @@ fn write_to_disk( buffer: &mut Buffer, state: &mut EditorState,//{{{
 // }}}
 fn append_to_disk( buffer: &mut Buffer, state: &mut EditorState,//{{{
                    command: Command ) -> Result<(), RedError> {
+    assert_eq!( 'W', command.operation );
     placeholder( buffer, state, command )
 }//}}}
 
