@@ -9,9 +9,9 @@ if expand('%') == '' && !&modified && line('$') <= 1 && getline(1) == ''
 endif
 set shortmess=aoO
 badd +0 src/main.rs
-badd +0 src/command.rs
-badd +0 src/parse.rs
+badd +0 src/ops.rs
 badd +0 src/io.rs
+badd +0 src/parse.rs
 badd +0 src/buf.rs
 badd +0 src/error.rs
 argglobal
@@ -34,15 +34,13 @@ setlocal fdn=20
 setlocal fen
 56
 normal! zo
-104
-normal! zo
-let s:l = 126 - ((12 * winheight(0) + 35) / 70)
+let s:l = 35 - ((34 * winheight(0) + 35) / 70)
 if s:l < 1 | let s:l = 1 | endif
 exe s:l
 normal! zt
-126
-normal! 09|
-tabedit src/command.rs
+35
+normal! 0
+tabedit src/ops.rs
 set splitbelow splitright
 set nosplitbelow
 set nosplitright
@@ -57,44 +55,34 @@ setlocal fdl=99
 setlocal fml=1
 setlocal fdn=20
 setlocal fen
-32
-normal! zo
-33
-normal! zo
-87
-normal! zo
-114
-normal! zo
-149
-normal! zo
-let s:l = 36 - ((18 * winheight(0) + 35) / 70)
+let s:l = 9 - ((8 * winheight(0) + 35) / 70)
 if s:l < 1 | let s:l = 1 | endif
 exe s:l
 normal! zt
-36
-normal! 014|
-tabedit src/parse.rs
-set splitbelow splitright
-set nosplitbelow
-set nosplitright
-wincmd t
-set winheight=1 winwidth=1
-argglobal
-setlocal fdm=marker
-setlocal fde=0
-setlocal fmr={{{,}}}
-setlocal fdi=#
-setlocal fdl=99
-setlocal fml=1
-setlocal fdn=20
-setlocal fen
-let s:l = 12 - ((11 * winheight(0) + 35) / 70)
-if s:l < 1 | let s:l = 1 | endif
-exe s:l
-normal! zt
-12
+9
 normal! 0
 tabedit src/io.rs
+set splitbelow splitright
+set nosplitbelow
+set nosplitright
+wincmd t
+set winheight=1 winwidth=1
+argglobal
+setlocal fdm=marker
+setlocal fde=0
+setlocal fmr={{{,}}}
+setlocal fdi=#
+setlocal fdl=99
+setlocal fml=1
+setlocal fdn=20
+setlocal fen
+let s:l = 1 - ((0 * winheight(0) + 35) / 70)
+if s:l < 1 | let s:l = 1 | endif
+exe s:l
+normal! zt
+1
+normal! 0
+tabedit src/parse.rs
 set splitbelow splitright
 set nosplitbelow
 set nosplitright
@@ -151,15 +139,13 @@ setlocal fdl=99
 setlocal fml=1
 setlocal fdn=20
 setlocal fen
-34
-normal! zo
-let s:l = 49 - ((48 * winheight(0) + 35) / 70)
+let s:l = 1 - ((0 * winheight(0) + 35) / 70)
 if s:l < 1 | let s:l = 1 | endif
 exe s:l
 normal! zt
-49
-normal! 035|
-tabnext 2
+1
+normal! 0
+tabnext 1
 if exists('s:wipebuf')
   silent exe 'bwipe ' . s:wipebuf
 endif

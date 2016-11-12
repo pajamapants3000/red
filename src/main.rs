@@ -11,11 +11,6 @@
 
 //! A re-implementation of the classic `ed` program in Rust
 //!
-//! Current functionality will be to simply open the file
-//! passed on invocation, and allow the user to execute print
-//! commands. These commands will output specified lines from
-//! the opened file.
-
 // Bring in to namespace {{{
 //extern crate clap;
 extern crate chrono;
@@ -28,7 +23,7 @@ mod io;
 mod parse;
 mod error;
 mod buf;
-mod command;
+mod ops;
 
 use std::env;
 
@@ -36,7 +31,7 @@ use parse::*;
 use buf::*;
 //use error::*;
 use io::*;
-use command::Operations;
+use ops::Operations;
 
 //use io::FileMode;
 
