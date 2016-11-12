@@ -31,6 +31,7 @@ use ::{EditorState, print_help};
 // ^^^ Attributes ^^^ }}}
 
 // *** Constants *** {{{
+const NUM_LC: usize = 26;
 // ^^^ Constants ^^^ }}}
 
 // *** Data Structures *** {{{
@@ -45,20 +46,6 @@ pub enum BufferInput {// {{{
     None,
 }// }}}
 // }}}
-/// Single assignment of a marker to a line// {{{
-///
-pub struct Marker {// {{{
-    label: char,
-    line: usize,
-}// }}}
-// }}}
-/// Specific line, character index in buffer// {{{
-/// XXX: Delete? I don't think I need this
-pub struct Cursor {// {{{
-    line: Option<usize>,
-    indx: Option<usize>,
-}// }}}
-// }}}
 /// Stores collection of lines containing current working text// {{{
 ///
 pub struct Buffer {     //{{{
@@ -71,7 +58,7 @@ pub struct Buffer {     //{{{
     /// timestamped path of file where buffer is stored regularly
     buffer_file: String,  // convert to Path later
     /// collection of markers set for lines in lines
-    markers: Vec<Marker>,
+    markers: Vec<usize>,
     /// line number of "cursor"
     ///
     /// By default, searches start from here, inserts go here, etc.
@@ -101,7 +88,7 @@ impl Buffer {   //{{{
                     temp_file_name( Some( file_name.as_str() ) ),
                 _ => temp_file_name( None ),
             },
-            markers: Vec::new(),
+            markers: vec!( 0; NUM_LC ),
             current_line: _total_lines,     // usize; should be Copy
             total_lines: _total_lines,
             _is_modified: false,
@@ -239,6 +226,7 @@ impl Buffer {   //{{{
         let mut back = self.lines.split_off( line_num );
         back.pop_front();
         self.lines.append( &mut back );
+        self.delete_update_markers( line_num );
     }// }}}
 // }}}
     /// Insert new line at current position// {{{
@@ -247,6 +235,7 @@ impl Buffer {   //{{{
     pub fn insert_here( &mut self, new_line: &str ) {// {{{
         let line_num = self.current_line;
         self.insert_line( line_num, new_line );
+        self.insert_update_markers( line_num );
     }// }}}
 // }}}
     /// Insert new line// {{{
@@ -257,6 +246,7 @@ impl Buffer {   //{{{
         self.lines.push_back( new_line.to_string() );
         self.lines.append( &mut back );
         self.set_current_line_number( line_num + 1 );
+        self.insert_update_markers( line_num );
     }// }}}
 // }}}
     /// Replace line with new string// {{{
@@ -295,30 +285,25 @@ impl Buffer {   //{{{
     }// }}}
 // }}}
     /// Return number of line with a specified mark set// {{{
-    pub fn get_marked_line( &self, label: char ) -> Option<usize> {// {{{
-        for i in 0 .. self.markers.len() {
-            if self.markers[i].label == label {
-                return Some( self.markers[i].line );
-            }
-        }
-        None
+    pub fn get_marked_line( &self, label: char ) -> usize {// {{{
+        self.markers[ (( label as u8 ) - ( 'a' as u8 )) as usize ]
     }// }}}
 // }}}
     /// Add new line marker// {{{
     ///
-    /// TODO: need exception handling? What can happen? Just out of space I think
-    pub fn set_marker( &mut self, _line: usize, _label: char ) {// {{{
-        self.markers.push( Marker{ label: _label, line: _line } );
+    pub fn set_marker( &mut self, line: usize, label: char ) {// {{{
+        self.markers[ (( label as u8 ) - ( 'a' as u8 )) as usize ] = line;
     }// }}}
 // }}}
     /// Return immutable slice over all markers// {{{
-    pub fn list_markers( &self ) -> &[ Marker ] {// {{{
-        self.markers.as_slice()
-    }// }}}
-// }}}
-    /// Return mutable slice over all markers// {{{
-    pub fn list_markers_mut( &mut self ) -> &mut [ Marker ] {// {{{
-        self.markers.as_mut_slice()
+    pub fn list_markers( &self ) {// {{{
+        let mut indx: u8 = 0;
+        for marker in &self.markers {
+            if *marker != 0 {
+                println!("{}: {}", (( 'a' as u8 ) + indx) as char, marker );
+            }
+            indx += 1;
+        }
     }// }}}
 // }}}
     /// Write buffer contents to temp file// {{{
@@ -487,6 +472,29 @@ impl Buffer {   //{{{
         self.lines.clear();
         Ok( () )
     }// }}}
+    /// Keep markers valid after inserting new line
+    ///
+    /// I can't think of any errors that might go here
+    fn insert_update_markers( &mut self, line_num: usize ) {
+        for marker in &mut self.markers {
+            if *marker > line_num {
+                *marker += 1;
+            }
+        }
+    }
+    /// Keep markers valid after deleting line;
+    /// delete any markers to deleted line
+    ///
+    /// I can't think of any errors that might go here
+    fn delete_update_markers( &mut self, line_num: usize ) {
+        for marker in &mut self.markers {
+            if *marker > line_num {
+                *marker -= 1;
+            } else if *marker == line_num {
+                *marker = 0;
+            }
+        }
+    }
 // }}}
 }   //}}}
 
