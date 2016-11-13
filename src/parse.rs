@@ -105,8 +105,12 @@ fn get_address_range( address_string: &str, buffer: &Buffer )// {{{
         _ => parse_address_list( address_string ),
     };
 
-    Ok( ((try!(parse_address_field( left, buffer ))).unwrap(),
-            (try!(parse_address_field( right, buffer ))).unwrap()) )
+    let result_right = try!(parse_address_field( right, buffer )).unwrap();
+    let result_left = match left.len() {
+        0 => result_right,
+        _ => try!(parse_address_field( left, buffer )).unwrap(),
+    };
+    Ok( (result_left, result_right) )
 
 }// }}}
 //}}}
@@ -139,9 +143,6 @@ fn parse_address_list( address_string: &str ) -> (&str, &str) {// {{{
                 }
             }
             None => {
-                if left.len() == 0 {
-                    left = right.trim().clone();
-                }
                 return ( left, right );
             },
         }
