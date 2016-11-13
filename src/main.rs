@@ -38,7 +38,7 @@ use ops::Operations;
 // }}}
 // *** Constants *** {{{
 const DEFAULT_MODE: EditorMode = EditorMode::Command;
-const DEFAULT_HELP: bool = false;
+const DEFAULT_HELP: bool = true;
 // ^^^ Constants ^^^ }}}
 // *** Data Structures *** {{{
 pub struct EditorState {
@@ -48,8 +48,6 @@ pub struct EditorState {
 pub enum EditorMode {
     Command,
     Insert,
-//    Replace { line: usize },
-//    View,
 }
 // ^^^ Data Structures ^^^ }}}
 

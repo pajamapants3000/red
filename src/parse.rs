@@ -12,13 +12,24 @@
 // Bring in to namespace {{{
 use std::str::Bytes;
 
+use regex::Regex;
+
 use error::*;
 use io::*;
 use buf::*;
 use ::{EditorState, EditorMode, print_help};
 
-// }}}
+// ^^^ Bring in to namespace ^^^ }}}
 
+// *** Attributes *** {{{
+// ^^^ Attributes ^^^ }}}
+// *** Constants *** {{{
+const ADDR_REGEX_FWDSEARCH: &'static str = r#"/([^/]*)/"#;
+const ADDR_REGEX_REVSEARCH: &'static str = r#"\?([^\?]*)\?"#;
+const ADDR_REGEX_RITHMETIC: &'static str = r#"(\d*|.|$)(((\+|-)(\d*))+)"#;
+const ADDR_REGEX_ADDORSUBT: &'static str = r#"((\+|-)(\d*))(((\+|-)(\d*))*)"#;
+
+// ^^^ Constants ^^^ }}}
 // *** Data Structures *** {{{
 pub struct Command<'a> {
     pub address_initial: usize,
@@ -29,6 +40,7 @@ pub struct Command<'a> {
 
 // ^^^ Data Structures ^^^ }}}
 
+// *** Functions *** {{{
 /// Parses command-mode input {{{
 ///
 /// This is the public interface to the parse module
@@ -86,11 +98,16 @@ pub fn parse_command<'a>( _cmd_input: &'a str, buffer: &Buffer,// {{{
 /// Probably want to ignore. or error?
 fn get_address_range( address_string: &str, buffer: &Buffer )// {{{
             -> Result<(usize, usize), RedError> {
-    let (left, right) = parse_address_list( address_string );
+    let (left, right) = match address_string {
+        "%" => ( "0", "$" ),
+        "," => ( "0", "$" ),
+        ";" => ( ".", "$" ),
+        _ => parse_address_list( address_string ),
+    };
 
     Ok( ((try!(parse_address_field( left, buffer ))).unwrap(),
             (try!(parse_address_field( right, buffer ))).unwrap()) )
-    
+
 }// }}}
 //}}}
 /// Test whether char is an address separator// {{{
@@ -114,16 +131,16 @@ fn parse_address_list( address_string: &str ) -> (&str, &str) {// {{{
                     match right.split_at( indx ) {
                         (x, y) => {
                             if x.len() > 0 {
-                                left = x;
+                                left = x.trim();
                             }
-                            right = &y[ 1 .. ];
+                            right = &y[ 1 .. ].trim();
                         }
                     }
                 }
             }
             None => {
                 if left.len() == 0 {
-                    left = right.clone();
+                    left = right.trim().clone();
                 }
                 return ( left, right );
             },
@@ -131,43 +148,135 @@ fn parse_address_list( address_string: &str ) -> (&str, &str) {// {{{
     }
 }// }}}
 // }}}
+/// Ensure line number is in buffer range// {{{
+fn normalize_line_num( buffer: &Buffer, line_num: usize ) -> usize {// {{{
+    let mut result = line_num;
+    if result > buffer.num_lines() {
+        buffer.num_lines()
+    } else if result < 1 {
+        1
+    } else {
+        result
+    }
+    // not reached
+}// }}}
+// }}}
+/// Calculates address from arithmetic expression// {{{
+fn calc_address_field( address: &str, buffer: &Buffer )// {{{
+            -> Result<Option<usize>, RedError> {
+    let re_rithmetic: Regex = Regex::new( ADDR_REGEX_RITHMETIC ).unwrap();
+    let re_addorsubt: Regex = Regex::new( ADDR_REGEX_ADDORSUBT ).unwrap();
+    let rithmetic_captures = re_rithmetic.captures( address ).unwrap();
+    let rithmetic_num_captures = rithmetic_captures.len();
+    let operand_lstr: &str = rithmetic_captures.at( 1 ).unwrap();
+    let mut operand_adds: usize = 0;
+    let mut operand_subs: usize = 0;
+    let mut operation_str: &str;
+    let mut operand_str: &str;
+    let mut next_step_str: &str;
+    // Parse left operand value
+    if operand_lstr == "." || operand_lstr == "" {
+        operand_adds = buffer.get_current_line_number();
+    } else if operand_lstr == "$" {
+        operand_adds = buffer.num_lines();
+    } else {
+        operand_adds = try!( operand_lstr.parse()
+                                .map_err(|_| RedError::AddressSyntax{
+                                address: address.to_string() } ));
+    }
+
+    next_step_str = rithmetic_captures.at(2).expect(
+            "parse::calc_address_field: regex capture missing" );
+    let mut next_step_caps = re_addorsubt.captures( next_step_str ).unwrap();
+    loop {
+        operation_str = next_step_caps.at( 2 ).expect(
+                "parse::calc_address_field: regex capture missing" );
+        operand_str = next_step_caps.at( 3 ).expect(
+                "parse::calc_address_field: regex capture missing" );
+
+        match operation_str {
+            "+" => {
+                operand_adds += match operand_str {
+                    "" => 1,
+                    _ => try!( operand_str.parse()
+                                .map_err(|_| RedError::AddressSyntax{
+                                address: address.to_string() } )),
+                };
+            },
+            "-" => {
+                operand_subs += match operand_str {
+                    "" => 1,
+                    _ => try!( operand_str.parse()
+                                .map_err(|_| RedError::AddressSyntax{
+                                address: address.to_string() } )),
+                };
+            },
+            _ => {
+                return Err( RedError::AddressSyntax{
+                    address: address.to_string() });
+            },
+        }
+
+        match next_step_caps.at(4) {
+            Some( "" ) => break,
+            Some( x )  => next_step_str = x,
+            None => return Err( RedError::AddressSyntax{
+                    address: address.to_string() }),
+        }
+        next_step_caps = re_addorsubt.captures( next_step_str ).unwrap();
+    }
+
+    if operand_subs > operand_adds {
+        Ok( Some( 1 ))
+    } else {
+        Ok( Some( normalize_line_num( &buffer, operand_adds - operand_subs ) ))
+    }
+}// }}}
+// }}}
 /// Parse address field; convert regex or integer into line number// {{{
 fn parse_address_field( address: &str, buffer: &Buffer )// {{{
             -> Result<Option<usize>, RedError> {
-    if address.len() > 0 {
-        match &address[0..1] {
-            "/" => {
-                if &address[ address.len() - 1 .. ] != "/" {
-                    return Err( RedError::AddressSyntax );
-                }
-                Ok( buffer.find_match(
-                        &address[1 .. address.len() - 1 ] ) )
-            }
-            "?" => {
-                if &address[ address.len() - 1 .. ] != "?" {
-                    return Err( RedError::AddressSyntax );
-                }
-                Ok( buffer.find_match_reverse(
-                        &address[1 .. address.len()-1 ] ) )
-            }
-            _ => {
+    let re_fwdsearch: Regex = Regex::new( ADDR_REGEX_FWDSEARCH ).unwrap();
+    let re_revsearch: Regex = Regex::new( ADDR_REGEX_REVSEARCH ).unwrap();
+    let re_rithmetic: Regex = Regex::new( ADDR_REGEX_RITHMETIC ).unwrap();
+    if address.len() == 0 {
+        Ok( Some( buffer.get_current_line_number() ))
+    } else if re_fwdsearch.is_match( address ) {
+        Ok( buffer.find_match( re_fwdsearch.captures( address )
+                               .unwrap().at(1).unwrap() ))
+    } else if re_revsearch.is_match( address ) {
+        Ok( buffer.find_match_reverse( re_revsearch.captures( address )
+                               .unwrap().at(1).unwrap() ))
+    //TODO: markers in arithmetic expression
+    } else if re_rithmetic.is_match( address ) {
+        calc_address_field( address, &buffer )
+    } else if address.len() == 1 {
+        match address {
+            "." => {
+                Ok( Some( buffer.get_current_line_number() ))
+            },
+            "$" => {
+                Ok( Some( buffer.num_lines() ))
+            },
+            x => {
                 match address.parse() {
-                    Ok(x) => {
-                        if x == 0 {
-                            Ok( Some( 1 ) )
-                        } else if x < buffer.num_lines() {
-                            Ok( Some(x) )
-                        } else {
-                            Ok( Some( buffer.num_lines() ) )
-                        }
-                    },
-                    _ => Ok( Some( buffer.get_current_line_number() ) ),
+                Ok(x) => Ok( Some( normalize_line_num( &buffer, x ) )),
+                Err(e) => Err( RedError::AddressSyntax {
+                    address: address.to_string() } ),
                 }
-            }
+            },
         }
+    } else if address.len() == 2 && &address[0..1] == "\'" {
+        Ok( Some(
+                buffer.get_marked_line( *&address[1..2]
+                                        .chars().next().unwrap() ) ))
     } else {
-        Ok( Some( buffer.get_current_line_number() ) )
+        match address.parse() {
+        Ok(x) => Ok( Some( normalize_line_num( &buffer, x ) )),
+        Err(e) => Err( RedError::AddressSyntax { address: address.to_string() } )
+        }
     }
+
 }// }}}
 // }}}
 /// Find index of operation code in string
@@ -301,6 +410,7 @@ fn is_in_regex( text: &str, indx: usize ) -> bool {// {{{
     }
 }// }}}
 // }}}
+// ^^^ Functions ^^^ }}}
 #[cfg(test)]
 mod tests {
     use super::{get_opchar_index, is_in_regex, parse_address_field, parse_address_list, get_address_range, is_address_separator};
@@ -511,7 +621,7 @@ mod tests {
         assert_eq!( fin, fin_expected );
         // Common test close routine
         close_command_buffer_test( &mut buffer );
-        
+
     }
     #[test]
     fn get_address_range_test_2() {
@@ -530,7 +640,7 @@ mod tests {
         assert_eq!( fin, fin_expected );
         // Common test close routine
         close_command_buffer_test( &mut buffer );
-        
+
     }
     #[test]
     fn get_address_range_test_3() {
@@ -549,7 +659,7 @@ mod tests {
         assert_eq!( fin, fin_expected );
         // Common test close routine
         close_command_buffer_test( &mut buffer );
-        
+
     }
     #[test]
     fn get_address_range_test_4() {
@@ -568,7 +678,7 @@ mod tests {
         assert_eq!( fin, fin_expected );
         // Common test close routine
         close_command_buffer_test( &mut buffer );
-        
+
     }
     #[test]
     fn parse_address_list_test_1() {
@@ -580,7 +690,7 @@ mod tests {
         let ( ini, fin ) = parse_address_list( address_string );
         assert_eq!( ini, ini_expected );
         assert_eq!( fin, fin_expected );
-        
+
     }
     #[test]
     fn parse_address_list_test_2() {
@@ -592,7 +702,7 @@ mod tests {
         let ( ini, fin ) = parse_address_list( address_string );
         assert_eq!( ini, ini_expected );
         assert_eq!( fin, fin_expected );
-        
+
     }
     #[test]
     fn parse_address_list_test_3() {
@@ -604,7 +714,7 @@ mod tests {
         let ( ini, fin ) = parse_address_list( address_string );
         assert_eq!( ini, ini_expected );
         assert_eq!( fin, fin_expected );
-        
+
     }
     #[test]
     fn parse_address_list_test_4() {
@@ -616,7 +726,7 @@ mod tests {
         let ( ini, fin ) = parse_address_list( address_string );
         assert_eq!( ini, ini_expected );
         assert_eq!( fin, fin_expected );
-        
+
     }
     #[test]
     fn parse_address_field_test_1() {
@@ -635,7 +745,7 @@ mod tests {
         assert_eq!( result, expected );
         // Common test close routine
         close_command_buffer_test( &mut buffer );
-        
+
     }
     #[test]
     fn parse_address_field_test_2() {
@@ -646,7 +756,7 @@ mod tests {
         let mut buffer = open_command_buffer_test( test_num,
                                                    command_line_version );
         let address_string: &str = "56";
-        let expected: usize = 8;
+        let expected: usize = 8;            // num_lines
         //
         let result = parse_address_field( address_string, &buffer )
             .unwrap()
@@ -654,7 +764,7 @@ mod tests {
         assert_eq!( result, expected );
         // Common test close routine
         close_command_buffer_test( &mut buffer );
-        
+
     }
     #[test]
     fn parse_address_field_test_3() {
@@ -673,7 +783,7 @@ mod tests {
         assert_eq!( result, expected );
         // Common test close routine
         close_command_buffer_test( &mut buffer );
-        
+
     }
     #[test]
     fn parse_address_field_test_4() {
@@ -692,6 +802,214 @@ mod tests {
         assert_eq!( result, expected );
         // Common test close routine
         close_command_buffer_test( &mut buffer );
-        
+
+    }
+    #[test]
+    fn parse_address_field_test_5() {
+        // set contstants
+        let test_num: u8 = 5;
+        let command_line_version: u8 = 1;
+        //
+        let mut buffer = open_command_buffer_test( test_num,
+                                                   command_line_version );
+        let address_string: &str = "?testcmd4?";
+        let expected: usize = 4;
+        //
+        let result = parse_address_field( address_string, &buffer )
+            .unwrap()
+            .unwrap();
+        assert_eq!( result, expected );
+        // Common test close routine
+        close_command_buffer_test( &mut buffer );
+
+    }
+    #[test]
+    fn parse_address_field_test_6() {
+        // set contstants
+        let test_num: u8 = 6;
+        let command_line_version: u8 = 1;
+        //
+        let mut buffer = open_command_buffer_test( test_num,
+                                                   command_line_version );
+        let address_string: &str = "/cmda te/";     // no match
+        let expected: Option<usize> = None;
+        //
+        let result = parse_address_field( address_string, &buffer )
+            .unwrap();
+        assert_eq!( result, expected );
+        // Common test close routine
+        close_command_buffer_test( &mut buffer );
+
+    }
+    #[test]
+    fn parse_address_field_test_7() {
+        // set contstants
+        let test_num: u8 = 7;
+        let command_line_version: u8 = 2;
+        //
+        let mut buffer = open_command_buffer_test( test_num,
+                                                   command_line_version );
+        let address_string: &str = "/cmda te/";
+        let expected: usize = 1;
+        //
+        let result = parse_address_field( address_string, &buffer )
+            .unwrap()
+            .unwrap();
+        assert_eq!( result, expected );
+        // Common test close routine
+        close_command_buffer_test( &mut buffer );
+
+    }
+    #[test]
+    fn parse_address_field_test_8() {
+        // set contstants
+        let test_num: u8 = 8;
+        let command_line_version: u8 = 1;
+        //
+        let mut buffer = open_command_buffer_test( test_num,
+                                                   command_line_version );
+        let address_string: &str = ".-3";
+        let expected: usize = 1;
+        //
+        let result = parse_address_field( address_string, &buffer )
+            .unwrap()
+            .unwrap();
+        assert_eq!( result, expected );
+        // Common test close routine
+        close_command_buffer_test( &mut buffer );
+
+    }
+    #[test]
+    fn parse_address_field_test_9() {
+        // set contstants
+        let test_num: u8 = 9;
+        let command_line_version: u8 = 1;
+        //
+        let mut buffer = open_command_buffer_test( test_num,
+                                                   command_line_version );
+        let address_string: &str = "+";
+        let expected: usize = 2;
+        //
+        let result = parse_address_field( address_string, &buffer )
+            .unwrap()
+            .unwrap();
+        assert_eq!( result, expected );
+        // Common test close routine
+        close_command_buffer_test( &mut buffer );
+
+    }
+    #[test]
+    fn parse_address_field_test_10() {
+        // set contstants
+        let test_num: u8 = 10;
+        let command_line_version: u8 = 1;
+        //
+        let mut buffer = open_command_buffer_test( test_num,
+                                                   command_line_version );
+        let address_string: &str = "5-3";
+        let expected: usize = 2;
+        //
+        let result = parse_address_field( address_string, &buffer )
+            .unwrap()
+            .unwrap();
+        assert_eq!( result, expected );
+        // Common test close routine
+        close_command_buffer_test( &mut buffer );
+
+    }
+    #[test]
+    fn parse_address_field_test_11() {
+        // set contstants
+        let test_num: u8 = 11;
+        let command_line_version: u8 = 1;
+        //
+        let mut buffer = open_command_buffer_test( test_num,
+                                                   command_line_version );
+        let address_string: &str = ".+1";
+        let expected: usize = 2;
+        //
+        let result = parse_address_field( address_string, &buffer )
+            .unwrap()
+            .unwrap();
+        assert_eq!( result, expected );
+        // Common test close routine
+        close_command_buffer_test( &mut buffer );
+
+    }
+    #[test]
+    fn parse_address_field_test_12() {
+        // set contstants
+        let test_num: u8 = 12;
+        let command_line_version: u8 = 1;
+        //
+        let mut buffer = open_command_buffer_test( test_num,
+                                                   command_line_version );
+        let address_string: &str = "7--1-3";
+        let expected: usize = 2;
+        //
+        let result = parse_address_field( address_string, &buffer )
+            .unwrap()
+            .unwrap();
+        assert_eq!( result, expected );
+        // Common test close routine
+        close_command_buffer_test( &mut buffer );
+
+    }
+    #[test]
+    fn parse_address_field_test_13() {
+        // set contstants
+        let test_num: u8 = 13;
+        let command_line_version: u8 = 1;
+        //
+        let mut buffer = open_command_buffer_test( test_num,
+                                                   command_line_version );
+        let address_string: &str = ".+1---+5";
+        let expected: usize = 4;
+        //
+        let result = parse_address_field( address_string, &buffer )
+            .unwrap()
+            .unwrap();
+        assert_eq!( result, expected );
+        // Common test close routine
+        close_command_buffer_test( &mut buffer );
+
+    }
+    #[test]
+    fn parse_address_field_test_14() {
+        // set contstants
+        let test_num: u8 = 14;
+        let command_line_version: u8 = 1;
+        //
+        let mut buffer = open_command_buffer_test( test_num,
+                                                   command_line_version );
+        let address_string: &str = "$-3";
+        let expected: usize = 5;
+        //
+        let result = parse_address_field( address_string, &buffer )
+            .unwrap()
+            .unwrap();
+        assert_eq!( result, expected );
+        // Common test close routine
+        close_command_buffer_test( &mut buffer );
+
+    }
+    #[test]
+    fn parse_address_field_test_15() {
+        // set contstants
+        let test_num: u8 = 15;
+        let command_line_version: u8 = 1;
+        //
+        let mut buffer = open_command_buffer_test( test_num,
+                                                   command_line_version );
+        let address_string: &str = "-5";
+        let expected: usize = 1;
+        //
+        let result = parse_address_field( address_string, &buffer )
+            .unwrap()
+            .unwrap();
+        assert_eq!( result, expected );
+        // Common test close routine
+        close_command_buffer_test( &mut buffer );
+
     }
 }

@@ -1,6 +1,6 @@
 /*
  * File   : io.rs
- * Purpose: 
+ * Purpose: handles input/output functionality
  * Program: red
  * About  : What does this program do?
  * Authors: Tommy Lincoln <pajamapants3000@gmail.com>
@@ -56,7 +56,7 @@ struct FileCoordinate {
 regex_search( needle: &str, from: FileCoordinate ) -> FileCoordinate {
 } */
 
-/// Opens file with user-specified name and mode 
+/// Opens file with user-specified name and mode
 ///
 /// Uses global definitions of mode flags in this file
 ///
@@ -92,7 +92,7 @@ pub fn get_input( mut input_buffer: String, state: &EditorState )
     let mut stdin_handle = stdin.lock();
     let mut stdout_handle = stdout.lock();
     let mut prompt: &str;
-    
+
     match state.mode {
         EditorMode::Command => prompt = PROMPT_COMMAND,
         EditorMode::Insert  => prompt = PROMPT_INSERT,

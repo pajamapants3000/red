@@ -233,7 +233,8 @@ fn print( buffer: &mut Buffer, state: &mut EditorState, command: Command )//{{{
         }
     }
     for indx in command.address_initial .. ( command.address_final + 1 ) {
-        println!("{}", buffer.get_line_content( indx ).unwrap() );
+        println!("{}", buffer.get_line_content( indx ).expect(
+                "ops::print: called get_line_content on out-of-range line" ) );
     }
     buffer.set_current_line_number( command.address_final );
     // TODO: Drop this? Or Keep to avoid unused warnings?
