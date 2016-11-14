@@ -71,7 +71,7 @@ pub fn parse_command<'a>( _cmd_input: &'a str, buffer: &Buffer,// {{{
             match _cmd_input.split_at( op_indx ) {
                 (x, y) => {
                     addrs = x;
-                    _parameters = &y[1..];
+                    _parameters = &y[1..].trim();
                 },
             }
             let ( _address_initial, _address_final ) = try!(
@@ -151,13 +151,12 @@ fn parse_address_list( address_string: &str ) -> (&str, &str) {// {{{
 // }}}
 /// Ensure line number is in buffer range// {{{
 fn normalize_line_num( buffer: &Buffer, line_num: usize ) -> usize {// {{{
-    let mut result = line_num;
-    if result > buffer.num_lines() {
+    if line_num > buffer.num_lines() {
         buffer.num_lines()
-    } else if result < 1 {
+    } else if line_num < 1 {
         1
     } else {
-        result
+        line_num
     }
     // not reached
 }// }}}
@@ -168,7 +167,6 @@ fn calc_address_field( address: &str, buffer: &Buffer )// {{{
     let re_rithmetic: Regex = Regex::new( ADDR_REGEX_RITHMETIC ).unwrap();
     let re_addorsubt: Regex = Regex::new( ADDR_REGEX_ADDORSUBT ).unwrap();
     let rithmetic_captures = re_rithmetic.captures( address ).unwrap();
-    let rithmetic_num_captures = rithmetic_captures.len();
     let operand_lstr: &str = rithmetic_captures.at( 1 ).unwrap();
     let mut operand_adds: usize = 0;
     let mut operand_subs: usize = 0;
@@ -259,10 +257,10 @@ fn parse_address_field( address: &str, buffer: &Buffer )// {{{
             "$" => {
                 Ok( Some( buffer.num_lines() ))
             },
-            x => {
+            _ => {
                 match address.parse() {
                 Ok(x) => Ok( Some( normalize_line_num( &buffer, x ) )),
-                Err(e) => Err( RedError::AddressSyntax {
+                Err(_) => Err( RedError::AddressSyntax {
                     address: address.to_string() } ),
                 }
             },

@@ -11,7 +11,7 @@
 
 // Use LineWriter instead of, or in addition to, BufWriter?
 use std::io::prelude::*;
-use std::io::{BufReader, BufWriter, stdin, stdout};
+use std::io::{BufReader, BufWriter, stdout};
 use std::fs::{self, File, copy, rename};
 use std::path::Path;
 use std::collections::LinkedList;
@@ -128,17 +128,25 @@ impl Buffer {   //{{{
                     let _stdout = stdout();
                     let mut handle = _stdout.lock();
                     thread::sleep(half_second);
-                    handle.write( b"." );
-                    handle.flush();
+                    handle.write( b"." )
+                        .expect("buf::Buffer::new: fail to write to stdout");
+                    handle.flush()
+                        .expect("buf::Buffer::new: fail to write to stdout");
                     thread::sleep(half_second);
-                    handle.write( b"." );
-                    handle.flush();
+                    handle.write( b"." )
+                        .expect("buf::Buffer::new: fail to write to stdout");
+                    handle.flush()
+                        .expect("buf::Buffer::new: fail to write to stdout");
                     thread::sleep(half_second);
-                    handle.write( b"." );
-                    handle.flush();
+                    handle.write( b"." )
+                        .expect("buf::Buffer::new: fail to write to stdout");
+                    handle.flush()
+                        .expect("buf::Buffer::new: fail to write to stdout");
                     thread::sleep(half_second);
-                    handle.write( b".\n" );
-                    handle.flush();
+                    handle.write( b".\n" )
+                        .expect("buf::Buffer::new: fail to write to stdout");
+                    handle.flush()
+                        .expect("buf::Buffer::new: fail to write to stdout");
                     if attempt == SAVE_RETRIES {
                         return Err( e );
                     }
@@ -243,8 +251,10 @@ impl Buffer {   //{{{
     /// Set new working file name// {{{
     ///
     /// At some point, need to test for existing file and ask user if overwrite
-    pub fn set_file_name( &mut self, file_name: &str ) {// {{{
+    pub fn set_file_name( &mut self, file_name: &str )
+            -> Result<(), RedError> {// {{{
         self.file = Some(file_name.to_string());
+        Ok( () )
     }// }}}
 // }}}
     /// Delete line// {{{
@@ -281,7 +291,7 @@ impl Buffer {   //{{{
     ///
     /// TODO: Add error handling, Result<> return?
     pub fn insert_line( &mut self, line_num: usize, new_line: &str ) {// {{{
-        let mut back = self.lines.split_off( line_num );
+        let mut back = self.lines.split_off( line_num - 1 );
         self.lines.push_back( new_line.to_string() );
         self.lines.append( &mut back );
         self.set_current_line_number( line_num + 1 );

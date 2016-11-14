@@ -60,7 +60,7 @@ fn main() {// {{{
     // initialize buffer
     let mut buffer = Buffer::new( BufferInput::None, &state )
         .expect( "Failed to create initial empty buffer" );
-    buffer.set_file_name( "untitled" );
+    buffer.set_file_name( "untitled" ).expect("main: failed to set file name");
     // Construct operations hashmap
     let operations = Operations::new();
     // Collect invocation arguments

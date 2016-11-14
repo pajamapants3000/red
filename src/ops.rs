@@ -157,7 +157,10 @@ fn edit( buffer: &mut Buffer, state: &mut EditorState, command: Command )
         -> Result<(), RedError> {// {{{
     assert_eq!( 'e', command.operation );
     let _ = try!( buffer.on_close( state ));
-    edit_unsafe( buffer, state, command )
+    edit_unsafe( buffer, state, Command{
+        address_initial: command.address_initial,
+        address_final: command.address_final,
+        operation: 'E', parameters: command.parameters })
 }//}}}
 fn edit_unsafe( buffer: &mut Buffer, state: &mut EditorState, command: Command )
         -> Result<(), RedError> {// {{{
@@ -194,7 +197,15 @@ fn edit_unsafe( buffer: &mut Buffer, state: &mut EditorState, command: Command )
 fn filename( buffer: &mut Buffer, state: &mut EditorState, command: Command )
         -> Result<(), RedError> {// {{{
     assert_eq!( 'f', command.operation );
-    placeholder( buffer, state, command )
+    if command.parameters == "" {
+        match buffer.get_file_name() {
+            Some(f) => println!( "filename: {}", f ),
+            None => println!( "no filename currently set" ),
+        }
+    } else {
+        try!( buffer.set_file_name( command.parameters ));
+    }
+    Ok( () )
 }//}}}
 fn global( buffer: &mut Buffer, state: &mut EditorState, command: Command )
         -> Result<(), RedError> {// {{{
@@ -224,14 +235,30 @@ fn insert( buffer: &mut Buffer, state: &mut EditorState, command: Command )
         -> Result<(), RedError> {// {{{
     assert_eq!( 'i', command.operation );
     // append is the default/natural line-insert behavior
-    buffer.set_current_line_number( command.address_final - 1 );
+    buffer.set_current_line_number( command.address_final );
     state.mode = EditorMode::Insert;
     Ok( () )
 }//}}}
 fn join( buffer: &mut Buffer, state: &mut EditorState, command: Command )
         -> Result<(), RedError> {// {{{
     assert_eq!( 'j', command.operation );
-    placeholder( buffer, state, command )
+    let mut new_line = String::new();
+    for line in command.address_initial .. command.address_final + 1 {
+        match buffer.get_line_content( line ) {
+            Some(x) => {
+                new_line.push_str( &x );
+            },
+            None => break,
+        }
+    }
+    try!( delete( buffer, state, Command{
+        address_initial: command.address_initial,
+        address_final: command.address_final,
+        operation: 'd', parameters: "" } ));
+    buffer.set_current_line_number( command.address_initial );
+    buffer.insert_here( &new_line );
+    try!( buffer.store_buffer() );
+    Ok( () )
 }//}}}
 fn mark( buffer: &mut Buffer, state: &mut EditorState, command: Command )
         -> Result<(), RedError> {// {{{
