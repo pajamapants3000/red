@@ -157,6 +157,11 @@ fn edit( buffer: &mut Buffer, state: &mut EditorState, command: Command )
         -> Result<(), RedError> {// {{{
     assert_eq!( 'e', command.operation );
     let _ = try!( buffer.on_close( state ));
+    edit_unsafe( buffer, state, command )
+}//}}}
+fn edit_unsafe( buffer: &mut Buffer, state: &mut EditorState, command: Command )
+        -> Result<(), RedError> {// {{{
+    assert_eq!( 'E', command.operation );
     let content = command.parameters;
     if &content[0..1] == COMMAND_PREFIX {  // process command
         match Buffer::new( BufferInput::Command(content[1..].to_string() ),
@@ -185,11 +190,6 @@ fn edit( buffer: &mut Buffer, state: &mut EditorState, command: Command )
                                      .unwrap_or( "<untitled>" ) ));
     }
     Ok( () )
-}//}}}
-fn edit_unsafe( buffer: &mut Buffer, state: &mut EditorState, command: Command )
-        -> Result<(), RedError> {// {{{
-    assert_eq!( 'E', command.operation );
-    placeholder( buffer, state, command )
 }//}}}
 fn filename( buffer: &mut Buffer, state: &mut EditorState, command: Command )
         -> Result<(), RedError> {// {{{

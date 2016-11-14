@@ -378,6 +378,7 @@ impl Buffer {   //{{{
               .map_err(|e| RedError::FileRename(e) )
             );
         self.buffer_file = new_buffer_file;
+        self.last_temp_write = UTC::now();
         Ok( () )
     }// }}}
 // }}}
@@ -407,6 +408,7 @@ impl Buffer {   //{{{
             try!( copy( &self.buffer_file, file_name )
                           .map_err( RedError::FileCopy ) );
         }
+        self.last_write = UTC::now();
         Ok( () )
     }// }}}
 // }}}
