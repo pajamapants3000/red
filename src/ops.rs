@@ -129,15 +129,28 @@ fn append( buffer: &mut Buffer, state: &mut EditorState, command: Command )
     state.mode = EditorMode::Insert;
     Ok( () )
 }//}}}
+/// Deletes address range and inserts text in its place// {{{
 fn change( buffer: &mut Buffer, state: &mut EditorState, command: Command )
         -> Result<(), RedError> {// {{{
     assert_eq!( 'c', command.operation );
-    placeholder( buffer, state, command )
+    let delete_command = Command{ address_initial: command.address_initial,
+            address_final: command.address_final, operation: 'd',
+            parameters: ""  };
+    let insert_command = Command{ address_initial: command.address_initial,
+            address_final: command.address_initial, operation: 'i',
+            parameters: ""  };
+    try!( delete( buffer, state, delete_command ) );
+    insert( buffer, state, insert_command )
 }//}}}
+// }}}
 fn delete( buffer: &mut Buffer, state: &mut EditorState, command: Command )
         -> Result<(), RedError> {// {{{
     assert_eq!( 'd', command.operation );
-    placeholder( buffer, state, command )
+    for _ in command.address_initial .. ( command.address_final + 1 ) {
+        // NOTE: lines move as you delete them - don't increment!
+        try!( buffer.delete_line( command.address_initial ) );
+    }
+    Ok( () )
 }//}}}
 fn edit( buffer: &mut Buffer, state: &mut EditorState, command: Command )
         -> Result<(), RedError> {// {{{

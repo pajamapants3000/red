@@ -222,11 +222,23 @@ impl Buffer {   //{{{
     /// Delete line// {{{
     ///
     /// TODO: Add error handling, Result<> return?
-    pub fn delete_line( &mut self, line_num: usize ) {// {{{
+    pub fn delete_line( &mut self, line_num: usize )
+            -> Result<(), RedError> {// {{{
+        if line_num > self.lines.len() {
+            return Err( RedError::GetLineOutOfBounds{ line_num: line_num } );
+        }
         let mut back = self.lines.split_off( line_num );
-        back.pop_front();
+        match self.lines.pop_back() {
+            Some(_) => {},
+            None => {
+                return Err(
+                    RedError::GetLineOutOfBounds{ line_num: line_num } );
+            },
+        }
         self.lines.append( &mut back );
         self.delete_update_markers( line_num );
+        self.total_lines -= 1; // previous tests preclude underflow here?
+        Ok( () )
     }// }}}
 // }}}
     /// Insert new line at current position// {{{
@@ -235,7 +247,6 @@ impl Buffer {   //{{{
     pub fn insert_here( &mut self, new_line: &str ) {// {{{
         let line_num = self.current_line;
         self.insert_line( line_num, new_line );
-        self.insert_update_markers( line_num );
     }// }}}
 // }}}
     /// Insert new line// {{{
@@ -247,6 +258,7 @@ impl Buffer {   //{{{
         self.lines.append( &mut back );
         self.set_current_line_number( line_num + 1 );
         self.insert_update_markers( line_num );
+        self.total_lines += 1;
     }// }}}
 // }}}
     /// Replace line with new string// {{{
@@ -255,7 +267,7 @@ impl Buffer {   //{{{
     pub fn set_line_content( &mut self, line_num: usize, new_line: &str )// {{{
             -> Result<(), RedError> {
         if line_num > self.lines.len() {
-            return Err( RedError::SetLineOutOfBounds );
+            return Err( RedError::SetLineOutOfBounds{ line_num: line_num } );
         }
         let mut back_list = self.lines.split_off( line_num - 1 );
         let _ = back_list.pop_front();
