@@ -1,4 +1,4 @@
-/*)
+/*
  * File   : main.rs
  * Purpose: reimplementation of the classic `ed` in Rust
  * Program: red
@@ -41,10 +41,12 @@ const DEFAULT_MODE: EditorMode = EditorMode::Command;
 const DEFAULT_HELP: bool = true;
 // ^^^ Constants ^^^ }}}
 // *** Data Structures *** {{{
+#[derive(Clone)]
 pub struct EditorState {
     mode: EditorMode,
     help: bool,
 }
+#[derive(Clone)]
 pub enum EditorMode {
     Command,
     Insert,
@@ -53,26 +55,22 @@ pub enum EditorMode {
 
 // *** Functions *** {{{
 fn main() {// {{{
-    let mut buffer: Buffer;
     // initialize editor state
     let mut state = EditorState { mode: DEFAULT_MODE, help: DEFAULT_HELP };
+    // initialize buffer
+    let mut buffer = Buffer::new( BufferInput::None, &state )
+        .expect( "Failed to create initial empty buffer" );
+    buffer.set_file_name( "untitled" );
     // Construct operations hashmap
     let operations = Operations::new();
-    // quick'n''dirty - will process one by one later; clap?
-    // No! Invocation for this program is very simple: manual processing
+    // Collect invocation arguments
     let args: Vec<String> = env::args().collect();
-
-    // take as direct arg; will later be arg to flag
+    // take as direct arg; will later check for additional -s, -p flags
     if args.len() > 1 {
-        let content = args[1].to_string();
-        if &content[0..1] == "@" {  // process command
-            buffer = Buffer::new(BufferInput::Command(content[1..].to_string()));
-        } else {                    // process file
-            buffer = Buffer::new(BufferInput::File(content));
-        }
-    } else {    // new file
-        buffer = Buffer::new(BufferInput::None);
-        buffer.set_file_name( "untitled" );
+        // generate and execute edit operation for requested file
+        let command = Command{ address_initial: 0, address_final: 0,
+                operation: 'e', parameters: &args[1] };
+        let _ = operations.execute( &mut buffer, &mut state, command );
     }
     /* Print buffer content for testing
     {
@@ -121,6 +119,8 @@ fn main() {// {{{
 }// }}}
 
 /// Print help, warnings, other output depending on setting
+///
+/// TODO: Change first arg to just boolean: state.help?
 pub fn print_help( state: &EditorState, output: &str ) {// {{{
     if state.help {
         println!( "{}", output );

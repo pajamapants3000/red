@@ -11,12 +11,14 @@
 
 // Use LineWriter instead of, or in addition to, BufWriter?
 use std::io::prelude::*;
-use std::io::{BufReader, BufWriter, stdin};
+use std::io::{BufReader, BufWriter, stdin, stdout};
 use std::fs::{self, File, copy, rename};
 use std::path::Path;
 use std::collections::LinkedList;
 use std::collections::linked_list::{Iter, IterMut};
 use std::iter::{IntoIterator, FromIterator, Iterator};
+use std::{thread, time};
+use std::ffi::OsStr;
 
 use ::chrono::*;
 use ::regex::Regex;
@@ -32,6 +34,7 @@ use ::{EditorState, print_help};
 
 // *** Constants *** {{{
 const NUM_LC: usize = 26;
+const SAVE_RETRIES: usize = 3;
 // ^^^ Constants ^^^ }}}
 
 // *** Data Structures *** {{{
@@ -77,16 +80,16 @@ pub struct Buffer {     //{{{
 // }}}
 impl Buffer {   //{{{
     /// Initialize new Buffer instance// {{{
-    pub fn new( content: BufferInput )     //{{{
-            -> Buffer {
+    pub fn new( content: BufferInput, state: &EditorState )     //{{{
+            -> Result<Buffer, RedError> {
         let mut _lines = Buffer::init_lines( &content );
         let _total_lines = _lines.len();
         let mut result = Buffer {
             lines: _lines,
             buffer_file: match &content {
                 &BufferInput::File( ref file_name ) =>
-                    temp_file_name( Some( file_name.as_str() ) ),
-                _ => temp_file_name( None ),
+                    try!( temp_file_name( Some( file_name.as_str() ) )),
+                _ => try!( temp_file_name( None )),
             },
             markers: vec!( 0; NUM_LC ),
             current_line: _total_lines,     // usize; should be Copy
@@ -111,15 +114,40 @@ impl Buffer {   //{{{
                 _ => None,
             },
         };
-        // TODO: ?
-        match result.store_buffer() {
-            Ok(_) => {},
-            Err(_) => {
-                println!("Unable to store buffer");
-            },
+
+        let half_second: time::Duration = time::Duration::from_millis(500);
+        for attempt in 1 .. ( SAVE_RETRIES + 1 ) {
+            match result.store_buffer() {
+                Ok(_) => {
+                    return Ok( result );
+                },
+                Err(e) => {
+                    print_help( state, &format!(
+                            "Attempt {}/{}: unable to store buffer",
+                            attempt, SAVE_RETRIES ));
+                    let _stdout = stdout();
+                    let mut handle = _stdout.lock();
+                    thread::sleep(half_second);
+                    handle.write( b"." );
+                    handle.flush();
+                    thread::sleep(half_second);
+                    handle.write( b"." );
+                    handle.flush();
+                    thread::sleep(half_second);
+                    handle.write( b"." );
+                    handle.flush();
+                    thread::sleep(half_second);
+                    handle.write( b".\n" );
+                    handle.flush();
+                    if attempt == SAVE_RETRIES {
+                        return Err( e );
+                    }
+                },
+            }
         }
-        result
-    }   //}}}
+        // not reached due to `if attempt == (SAVE_RETRIES - 1)`
+        Err( RedError::CriticalError( "reached unreachable line".to_string() ))
+    }//}}}
 // }}}
     /// Return total number of lines in buffer// {{{
     pub fn num_lines( &self ) -> usize {// {{{
@@ -343,8 +371,8 @@ impl Buffer {   //{{{
         }
         try!( writer.flush().map_err( |e| RedError::FileWrite(e) ));
         let new_buffer_file = match &self.file {
-            &Some(ref x) => temp_file_name( Some( x.as_str() ) ),
-            &None => temp_file_name( None ),
+            &Some(ref x) => try!( temp_file_name( Some( x.as_str() ) )),
+            &None => try!( temp_file_name( None )),
         };
         try!( rename( &self.buffer_file, &new_buffer_file )
               .map_err(|e| RedError::FileRename(e) )
@@ -465,23 +493,43 @@ impl Buffer {   //{{{
         None
     }// }}}
 // }}}
-    /// Deconstruct buffer// {{{
-    pub fn destruct( &mut self ) -> Result<(), RedError> {// {{{
-        let _stdin = stdin();
+    /// Prepare for closing buffer// {{{
+    pub fn on_close( &mut self, state: &EditorState )
+            -> Result<(), RedError> {// {{{
         if self.is_modified() {
-            println!("Write file before closing?\n>");
-            let mut _stdin_handle = _stdin.lock();
-            let mut response: String = "".to_string();
-            _stdin_handle.read_to_string( &mut response )
-                .expect("Failed to read user input");
-            match response.to_lowercase().as_str() {
-                "y" | "yes" => { try!( self.write_to_disk( "" ) ); },
-                _ => (),
-            }
+            print_help( &state, "buffer has unsaved changes" );
+            return Err( RedError::NoDestruct );
         }
         fs::remove_file( &self.buffer_file )
             .expect("Failed to delete buffer file");
+        Ok( () )
+    }//}}}
+// }}}
+    /// Deconstruct buffer// {{{
+    /// I'm not sure we need this function, since opening a new
+    /// file or command just creates a new Buffer instance and the
+    /// old one should be deleted automatically; use on_close to
+    /// check for unsaved changes and ensure the buffer temp file
+    /// is deleted.
+    pub fn destruct( &mut self, state: EditorState )
+            -> Result<(), RedError> {// {{{
+        if self.is_modified() {
+            print_help( &state, "buffer has unsaved changes" );
+            return Err( RedError::NoDestruct );
+        }
+        fs::remove_file( &self.buffer_file )
+            .expect("Failed to delete buffer file");
+        // restore all values to defaults - necessary?
         self.lines.clear();
+        self.file = None;
+        self.buffer_file = "".to_string();
+        self.markers = Vec::new();
+        self.current_line = 0;
+        self.total_lines = 0;
+        self._is_modified = false;
+        self.last_update = get_null_time();
+        self.last_temp_write = get_null_time();
+        self.last_write = get_null_time();
         Ok( () )
     }// }}}
     /// Keep markers valid after inserting new line
@@ -542,16 +590,27 @@ fn get_null_time() -> datetime::DateTime<UTC> {// {{{
 /// # Errors
 /// # Safety
 /// # Examples
-fn temp_file_name( file_name: Option<&str> ) -> String {// {{{
+fn temp_file_name( file_name: Option<&str> ) -> Result<String, RedError> {// {{{
     // only way to conflict is by choosing the same eight alphanumeric
     // characters in less than a second!
     let random_string: String = thread_rng()
                                 .gen_ascii_chars().take(8).collect();
     match file_name {
-        Some(x) => ".red.".to_string() + x +
-                random_string.as_str() + "." + &get_timestamp(),
-        None => ".red.".to_string() + random_string.as_str() +
-            "." + &get_timestamp(),
+        Some(x) => {
+            let path = try!( fs::canonicalize( x )
+                             .map_err(|e| RedError::FileExist(e)) );
+            let parent: &str;
+            match path.parent() {
+                Some( _parent ) => parent = _parent.to_str().unwrap_or("."),
+                None => parent = ".",
+            }
+            return Ok( parent.to_string() + "/.red." +
+                       path.file_name().unwrap_or(OsStr::new("temp") )
+                       .to_str().unwrap_or("temp") +
+                       "." + random_string.as_str() + "." + &get_timestamp() );
+        },
+        None => Ok( "./.red.".to_string() + random_string.as_str() +
+            "." + &get_timestamp() ),
     }
 }// }}}
 // }}}

@@ -20,7 +20,8 @@ use ::{EditorState, EditorMode, print_help};
 // ^^^ Bring in to namespace ^^^ }}}
 
 // *** Attributes *** {{{
-const NUM_OPERATIONS: usize = 32;
+const NUM_OPERATIONS: usize = 26;
+const COMMAND_PREFIX: &'static str = "@";
 // ^^^ Attributes ^^^ }}}
 
 // *** Constants *** {{{
@@ -155,7 +156,35 @@ fn delete( buffer: &mut Buffer, state: &mut EditorState, command: Command )
 fn edit( buffer: &mut Buffer, state: &mut EditorState, command: Command )
         -> Result<(), RedError> {// {{{
     assert_eq!( 'e', command.operation );
-    placeholder( buffer, state, command )
+    let _ = try!( buffer.on_close( state ));
+    let content = command.parameters;
+    if &content[0..1] == COMMAND_PREFIX {  // process command
+        match Buffer::new( BufferInput::Command(content[1..].to_string() ),
+                state ) {
+            Ok( _buffer ) => {
+                *buffer = _buffer;
+            },
+            Err(e) => {
+                return Err(e);
+            },
+        };
+        print_help( &state, &format!( "Now editing output of command: {}",
+                                     buffer.get_file_name()
+                                     .unwrap_or( "<untitled>" ) ));
+    } else {                    // process file
+        match Buffer::new(BufferInput::File( content.to_string() ), state ) {
+            Ok( _buffer ) => {
+                *buffer = _buffer;
+            },
+            Err(e) => {
+                return Err(e);
+            },
+        };
+        print_help( &state, &format!( "Now editing file: {}",
+                                     buffer.get_file_name()
+                                     .unwrap_or( "<untitled>" ) ));
+    }
+    Ok( () )
 }//}}}
 fn edit_unsafe( buffer: &mut Buffer, state: &mut EditorState, command: Command )
         -> Result<(), RedError> {// {{{
@@ -263,12 +292,7 @@ fn print( buffer: &mut Buffer, state: &mut EditorState, command: Command )//{{{
 fn quit( buffer: &mut Buffer, state: &mut EditorState, command: Command )//{{{
             -> Result<(), RedError> {
     assert_eq!( 'q', command.operation );
-    if command.parameters == "!" && buffer.is_modified() {
-        println!("file changed since last write");
-    }
-    // TODO: Drop this? Or Keep to avoid unused warnings?
-    state.mode = EditorMode::Command;
-    match buffer.destruct() {
+    match buffer.on_close( state ) {
         Ok( _ ) => exit( error_code( RedError::Quit ) as i32),
         Err( _ ) => exit( error_code( RedError::NoDestruct ) as i32),
     }
