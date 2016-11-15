@@ -304,7 +304,15 @@ fn mark( buffer: &mut Buffer, state: &mut EditorState, command: Command )
 fn lines_list( buffer: &mut Buffer, state: &mut EditorState, command: Command )
         -> Result<(), RedError> {// {{{
     assert_eq!( 'l', command.operation );
-    placeholder( buffer, state, command )
+    let mut indx: usize = 0;
+    let num_lines_f: f64 = buffer.num_lines() as f64 + 1.0_f64;
+    let _width = num_lines_f.log10().ceil() as usize;
+    for _line in buffer.lines_iterator() {
+        indx += 1;
+        print!( "{:width$}|", indx, width = _width );
+        println!("{}", _line );
+    }
+    Ok( () )
 }//}}}
 fn move_lines( buffer: &mut Buffer, state: &mut EditorState, command: Command )
         -> Result<(), RedError> {// {{{
