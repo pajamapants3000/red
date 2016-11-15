@@ -13,7 +13,7 @@
 use std::io::prelude::*;
 use std::io::{BufReader, BufWriter, stdout};
 use std::fs::{self, File, copy, rename};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::collections::LinkedList;
 use std::collections::linked_list::{Iter, IterMut};
 use std::iter::{IntoIterator, FromIterator, Iterator};
@@ -612,12 +612,20 @@ fn temp_file_name( file_name: Option<&str> ) -> Result<String, RedError> {// {{{
     let random_string: String = thread_rng()
                                 .gen_ascii_chars().take(8).collect();
     match file_name {
-        Some(x) => {
-            let path = try!( fs::canonicalize( x )
-                             .map_err(|e| RedError::FileExist(e)) );
+        Some(f) => {
+            let path: PathBuf;
+            match fs::canonicalize(f).map_err(|e| RedError::FileExist(e)) {
+                Ok(x) => path = x,
+                Err(e) => path = PathBuf::from(f),
+            }
             let parent: &str;
             match path.parent() {
-                Some( _parent ) => parent = _parent.to_str().unwrap_or("."),
+                Some( _parent ) => {
+                    parent = match _parent.to_str().unwrap_or(".") {
+                        "" => ".",
+                        x => x,
+                    };
+                },
                 None => parent = ".",
             }
             return Ok( parent.to_string() + "/.red." +
