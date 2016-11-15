@@ -304,6 +304,35 @@ fn mark( buffer: &mut Buffer, state: &mut EditorState, command: Command )
 fn lines_list( buffer: &mut Buffer, state: &mut EditorState, command: Command )
         -> Result<(), RedError> {// {{{
     assert_eq!( 'l', command.operation );
+    placeholder( buffer, state, command )
+}//}}}
+fn move_lines( buffer: &mut Buffer, state: &mut EditorState, command: Command )
+        -> Result<(), RedError> {// {{{
+    assert_eq!( 'm', command.operation );
+    let mut destination: usize = match command.parameters.parse() {
+        Ok(x) => x,
+        Err(_) => 0,
+    };
+    destination += 1;           // we want to append at this line
+    let mut offset: usize = 0;
+    let mut line: String;
+    for line_num in command.address_initial .. command.address_final + 1 {
+        line = buffer.get_line_content( line_num - offset )
+            .unwrap_or("").to_string();
+        try!( buffer.delete_line( line_num - offset ));
+        if ( line_num - offset ) > destination {
+            buffer.insert_line( destination, &line );
+        } else {
+            offset += 1;
+            buffer.insert_line( destination - offset, &line );
+        }
+        destination += 1;
+    }
+    Ok( () )
+}//}}}
+fn print_numbered( buffer: &mut Buffer, state: &mut EditorState,//{{{
+                   command: Command ) -> Result<(), RedError> {
+    assert_eq!( 'n', command.operation );
     let mut indx: usize = 0;
     let num_lines_f: f64 = buffer.num_lines() as f64 + 1.0_f64;
     let _width = num_lines_f.log10().ceil() as usize;
@@ -313,16 +342,6 @@ fn lines_list( buffer: &mut Buffer, state: &mut EditorState, command: Command )
         println!("{}", _line );
     }
     Ok( () )
-}//}}}
-fn move_lines( buffer: &mut Buffer, state: &mut EditorState, command: Command )
-        -> Result<(), RedError> {// {{{
-    assert_eq!( 'm', command.operation );
-    placeholder( buffer, state, command )
-}//}}}
-fn print_numbered( buffer: &mut Buffer, state: &mut EditorState,//{{{
-                   command: Command ) -> Result<(), RedError> {
-    assert_eq!( 'n', command.operation );
-    placeholder( buffer, state, command )
 }//}}}
 /// Display range of lines of buffer in terminal // {{{
 ///
