@@ -9,7 +9,7 @@
  * Created: 10/16/2016
  */
 
-//! A re-implementation of the classic `ed` program in Rust
+//! A re-implementation, in Rust, of the classic `ed` program
 //!
 // Bring in to namespace {{{
 //extern crate clap;
@@ -42,6 +42,9 @@ const DEFAULT_HELP: bool = true;
 // ^^^ Constants ^^^ }}}
 // *** Data Structures *** {{{
 #[derive(Clone)]
+/// Contain state values for the program during execution
+///
+/// TODO: include buffer and command structures?
 pub struct EditorState {
     mode: EditorMode,
     help: bool,

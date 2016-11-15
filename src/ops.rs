@@ -9,6 +9,15 @@
  * Created: 11/05/2016
  */
 
+//! Operations callable by the user during program execution
+//!
+//! All operations take as arguments the current buffer, editor state, and
+//! command (these may eventually be condensed into editor state) and return
+//! Result<(), RedError>
+//!
+//! All operations assume that the addresses passed through the command have
+//! already been checked for validity and range. This is handled when the
+//! command is parsed, and so is a safe assumption.
 // *** Bring in to namespace *** {{{
 use std::collections::hash_map::HashMap;
 use std::process::exit;
@@ -262,8 +271,35 @@ fn join( buffer: &mut Buffer, state: &mut EditorState, command: Command )
 }//}}}
 fn mark( buffer: &mut Buffer, state: &mut EditorState, command: Command )
         -> Result<(), RedError> {// {{{
-    assert_eq!( 'm', command.operation );
-    placeholder( buffer, state, command )
+    assert_eq!( 'k', command.operation );
+    // make sure we have been provided a single character for the mark
+    let param_len = command.parameters.len();
+    if param_len > 1 || param_len == 0 {
+        print_help( state, "mark must be a single character" );
+        return Err( RedError::ParameterSyntax{
+            parameter: command.parameters.to_string() });
+    }
+    let mark_char = match command.parameters.chars().next() {
+        Some(x) => {
+            if !( 'a' <= x && x <= 'z' ) {
+                print_help( state,
+                        "mark must be a lowercase latin character ('a'..'z')" );
+                return Err( RedError::ParameterSyntax{
+                        parameter: command.parameters.to_string() });
+            } else {
+                x
+            }
+        },
+        None => {
+            print_help( state, "failed to parse mark character" );
+            return Err( RedError::ParameterSyntax{
+                    parameter: command.parameters.to_string() });
+        },
+    };
+    // if given a section of lines, mark the beginning
+    buffer.set_marker( command.address_initial, mark_char );
+    Ok( () )
+
 }//}}}
 fn lines_list( buffer: &mut Buffer, state: &mut EditorState, command: Command )
         -> Result<(), RedError> {// {{{

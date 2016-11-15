@@ -12,7 +12,7 @@
 // Bring in to namespace {{{
 use std::str::Bytes;
 
-use regex::Regex;
+use regex::{Regex, Captures};
 
 use error::*;
 use io::*;
@@ -28,6 +28,7 @@ const ADDR_REGEX_FWDSEARCH: &'static str = r#"/([^/]*)/"#;
 const ADDR_REGEX_REVSEARCH: &'static str = r#"\?([^\?]*)\?"#;
 const ADDR_REGEX_RITHMETIC: &'static str = r#"(\d*|.|$)(((\+|-)(\d*))+)"#;
 const ADDR_REGEX_ADDORSUBT: &'static str = r#"((\+|-)(\d*))(((\+|-)(\d*))*)"#;
+const ADDR_REGEX_MARKER:    &'static str = r#"'([:lower:])"#;
 
 // ^^^ Constants ^^^ }}}
 // *** Data Structures *** {{{
@@ -238,18 +239,10 @@ fn parse_address_field( address: &str, buffer: &Buffer )// {{{
     let re_fwdsearch: Regex = Regex::new( ADDR_REGEX_FWDSEARCH ).unwrap();
     let re_revsearch: Regex = Regex::new( ADDR_REGEX_REVSEARCH ).unwrap();
     let re_rithmetic: Regex = Regex::new( ADDR_REGEX_RITHMETIC ).unwrap();
-    if address.len() == 0 {
+    let re_marker:    Regex = Regex::new( ADDR_REGEX_MARKER    ).unwrap();
+    if address.len() == 0 {         // no address provided - use current
         Ok( Some( buffer.get_current_line_number() ))
-    } else if re_fwdsearch.is_match( address ) {
-        Ok( buffer.find_match( re_fwdsearch.captures( address )
-                               .unwrap().at(1).unwrap() ))
-    } else if re_revsearch.is_match( address ) {
-        Ok( buffer.find_match_reverse( re_revsearch.captures( address )
-                               .unwrap().at(1).unwrap() ))
-    //TODO: markers in arithmetic expression
-    } else if re_rithmetic.is_match( address ) {
-        calc_address_field( address, &buffer )
-    } else if address.len() == 1 {
+    } else if address.len() == 1 {  // single character provided as address
         match address {
             "." => {
                 Ok( Some( buffer.get_current_line_number() ))
@@ -265,17 +258,26 @@ fn parse_address_field( address: &str, buffer: &Buffer )// {{{
                 }
             },
         }
-    } else if address.len() == 2 && &address[0..1] == "\'" {
-        Ok( Some(
-                buffer.get_marked_line( *&address[1..2]
-                                        .chars().next().unwrap() ) ))
-    } else {
-        match address.parse() {
-        Ok(x) => Ok( Some( normalize_line_num( &buffer, x ) )),
-        Err(e) => Err( RedError::AddressSyntax { address: address.to_string() } )
+    } else if re_fwdsearch.is_match( address ) {    // forward regex search?
+        Ok( buffer.find_match( re_fwdsearch.captures( address )
+                               .unwrap().at(1).unwrap() ))
+    } else if re_revsearch.is_match( address ) {    // backward regex search?
+        Ok( buffer.find_match_reverse( re_revsearch.captures( address )
+                               .unwrap().at(1).unwrap() ))
+    } else {    // otherwise, replace any markers and calculate/parse
+        let _address: &str = &re_marker.replace( address, |caps: &Captures| {
+            buffer.get_marked_line( caps.at(1).unwrap_or("A").chars()
+                                    .next().unwrap_or('A') ).to_string() });
+        if re_rithmetic.is_match( _address ) {  // +/- operation(s)
+            calc_address_field( _address, &buffer )
+        } else {                                // just a (multi-digit) number
+            match _address.parse() {
+            Ok(x) => Ok( Some( normalize_line_num( &buffer, x ) )),
+            Err(e) => Err( RedError::AddressSyntax{
+                    address: _address.to_string() } )
+            }
         }
     }
-
 }// }}}
 // }}}
 /// Find index of operation code in string
@@ -354,13 +356,13 @@ fn get_opchar_index( _cmd_input: &str ) -> Result<(usize, char), RedError> {
         match bytes_iter.next() {
             Some( x ) => {
                 if _cmd_input.is_char_boundary( current_indx ) {
-                    if !is_in_regex( _cmd_input.trim(), current_indx ) {
-                        match x {
-                            b'a'...b'z' | b'A'...b'Z' => {
+                    match x {
+                        b'a'...b'z' | b'A'...b'Z' => {
+                            if !is_in_addr( _cmd_input.trim(), current_indx ) {
                                 return Ok( (current_indx, x as char ) );
-                            },
+                            }
+                        },
                             _ => {},
-                        }
                     }
                 }
             },
@@ -370,6 +372,33 @@ fn get_opchar_index( _cmd_input: &str ) -> Result<(usize, char), RedError> {
     }
     Result::Err( RedError::OpCharIndex )
 }
+/// Return true if character at indx is part of address// {{{
+///
+/// first, checks to see if character is preceded by a single-quote, which
+/// would indicate that it is a marker;
+/// then, checks to see if character is part of a regular expression via
+/// the is_in_regex function;
+fn is_in_addr( text: &str, indx: usize ) -> bool {// {{{
+    is_marker( text, indx ) || is_in_regex( text, indx )
+}// }}}
+// }}}
+/// Return true if character at indx is preceded by a single-quote//{{{
+fn is_marker( text: &str, indx: usize ) -> bool {// {{{
+    // set curr_indx to just before char before char at current indx
+    let mut curr_indx: usize = 0;
+    if indx > 0 {
+        curr_indx = indx - 1;
+    }
+    let ( _, right ) = text.split_at( curr_indx );
+    let mut _chars = right.chars();
+    if _chars.next().unwrap_or('\0') == '\'' {
+        true
+    } else {
+        false
+    }
+    // unreached
+}//}}}
+//}}}
 /// Return true if index is contained in regex// {{{
 ///
 /// Is regex if wrapped in /.../ or ?...? within larger string

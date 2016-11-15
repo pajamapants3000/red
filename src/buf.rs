@@ -336,7 +336,11 @@ impl Buffer {   //{{{
 // }}}
     /// Return number of line with a specified mark set// {{{
     pub fn get_marked_line( &self, label: char ) -> usize {// {{{
-        self.markers[ (( label as u8 ) - ( 'a' as u8 )) as usize ]
+        if 'a' <= label && label <= 'z' {
+            self.markers[ (( label as u8 ) - ( 'a' as u8 )) as usize ]
+        } else {
+            0_usize
+        }
     }// }}}
 // }}}
     /// Add new line marker// {{{
