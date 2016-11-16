@@ -396,7 +396,47 @@ impl Buffer {   //{{{
         Ok( () )
     }// }}}
 // }}}
-    /// Save work to permanent file// {{{
+    /// Save work to permanent file; behavior depends on file_mode argument// {{{
+    ///
+    /// TODO: move to io.rs? I don't think so, it's a part of the
+    /// functionality of the buffer
+    /// TODO: set up default filename?
+    /// # Panics
+    /// # Errors
+    /// # Safety
+    /// # Examples
+    fn _write_to_disk( &mut self, file_name: &str,// {{{
+                   file_mode: FileMode ) -> Result<(), RedError> {
+        try!( self.store_buffer() );
+        self.last_temp_write = UTC::now();
+        let _filename: &str = match file_name.len() {
+            0 => {
+                match &self.file {
+                    &Some(ref x) => {
+                        x
+                    },
+                    &None => {
+                        println!("No file name chosen for save");
+                        return Err(
+                            RedError::ParameterSyntax{
+                                parameter: "".to_string() });
+                    },
+                }
+            },
+            _ => file_name,
+        };
+        let mut file_opened = try!( file_opener( _filename, file_mode ));
+        let mut buf_file = try!( file_opener( &self.buffer_file,
+                      FileMode{ f_read: true, ..Default::default() }));
+        let mut buf: Vec<u8> = Vec::new();
+        buf_file.read_to_end( &mut buf );
+        file_opened.write( &mut buf );
+        self.last_write = UTC::now();
+        Ok( () )
+
+    }// }}}
+// }}}
+    /// Save work to permanent file; truncate existing contents// {{{
     ///
     /// TODO: move to io.rs? I don't think so, it's a part of the
     /// functionality of the buffer
@@ -407,23 +447,25 @@ impl Buffer {   //{{{
     /// # Examples
     pub fn write_to_disk( &mut self, file_name: &str )// {{{
             -> Result<(), RedError> {
-        try!( self.store_buffer() );
-        if file_name.len() == 0 {
-            match &self.file {
-                &Some(ref x) => {
-                    try!( copy( &self.buffer_file, x )
-                          .map_err( RedError::FileCopy ) );
-                },
-                &None => {
-                    println!("No file name chosen for save");
-                },
-            }
-        } else {
-            try!( copy( &self.buffer_file, file_name )
-                          .map_err( RedError::FileCopy ) );
-        }
-        self.last_write = UTC::now();
-        Ok( () )
+        let file_mode = FileMode{ f_truncate: true, f_create: true,
+                ..Default::default() };
+        self._write_to_disk( file_name, file_mode )
+    }// }}}
+// }}}
+    /// Append work to permanent file// {{{
+    ///
+    /// TODO: move to io.rs? I don't think so, it's a part of the
+    /// functionality of the buffer
+    /// TODO: set up default filename?
+    /// # Panics
+    /// # Errors
+    /// # Safety
+    /// # Examples
+    pub fn append_to_disk( &mut self, file_name: &str )// {{{
+            -> Result<(), RedError> {
+        let file_mode = FileMode{ f_append: true, f_create: true,
+                ..Default::default() };
+        self._write_to_disk( file_name, file_mode )
     }// }}}
 // }}}
     /// Determine whether line matches regex// {{{

@@ -1,0 +1,26 @@
+%3p
+new line three
+%i
+!new testing
+!.
+%p
+new line three
+%-p
+main: AddressSyntax { address: "-" }
+%+p
+main: AddressSyntax { address: "+" }
+%-1p\
+> 
+new testing
+
+
+
+%e new
+Now editing file: new
+%%p
+%i
+!testing
+thread 'main' panicked at 'attempt to subtract with overflow', src/buf.rs:294
+note: Run with `RUST_BACKTRACE=1` for a backtrace.
+
+

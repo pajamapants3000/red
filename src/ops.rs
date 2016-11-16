@@ -481,7 +481,7 @@ fn write_to_disk( buffer: &mut Buffer, state: &mut EditorState,//{{{
 fn append_to_disk( buffer: &mut Buffer, state: &mut EditorState,//{{{
                    command: Command ) -> Result<(), RedError> {
     assert_eq!( 'W', command.operation );
-    placeholder( buffer, state, command )
+    buffer.append_to_disk( command.parameters )
 }//}}}
 
 // ^^^ Functions ^^^ }}}
