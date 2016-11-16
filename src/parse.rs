@@ -169,7 +169,7 @@ fn calc_address_field( address: &str, buffer: &Buffer )// {{{
     let re_addorsubt: Regex = Regex::new( ADDR_REGEX_ADDORSUBT ).unwrap();
     let rithmetic_captures = re_rithmetic.captures( address ).unwrap();
     let operand_lstr: &str = rithmetic_captures.at( 1 ).unwrap();
-    let mut operand_adds: usize = 0;
+    let mut operand_adds: usize;
     let mut operand_subs: usize = 0;
     let mut operation_str: &str;
     let mut operand_str: &str;
@@ -273,7 +273,7 @@ fn parse_address_field( address: &str, buffer: &Buffer )// {{{
         } else {                                // just a (multi-digit) number
             match _address.parse() {
             Ok(x) => Ok( Some( normalize_line_num( &buffer, x ) )),
-            Err(e) => Err( RedError::AddressSyntax{
+            Err(_) => Err( RedError::AddressSyntax{
                     address: _address.to_string() } )
             }
         }

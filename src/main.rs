@@ -18,6 +18,7 @@ extern crate regex;
 extern crate rand;
 #[macro_use]
 extern crate lazy_static;
+extern crate term_size;
 
 mod io;
 mod parse;
@@ -90,6 +91,9 @@ fn main() {// {{{
         input = get_input( input, &state );
         match state.mode {
             EditorMode::Command => {
+                if input == "" {
+                    continue;
+                }
                 let command: Command;
                 match parse_command( &input, &buffer, &state ) {
                     Ok(x) => {

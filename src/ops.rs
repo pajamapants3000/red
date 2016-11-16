@@ -21,11 +21,12 @@
 // *** Bring in to namespace *** {{{
 use std::collections::hash_map::HashMap;
 use std::process::exit;
+use std::io::{Write, BufRead, BufWriter, stdout, StdoutLock, stdin};
 
 use buf::*;
 use error::*;
 use parse::*;
-use ::{EditorState, EditorMode, print_help};
+use ::{EditorState, EditorMode, print_help, term_size};
 // ^^^ Bring in to namespace ^^^ }}}
 
 // *** Attributes *** {{{
@@ -304,8 +305,58 @@ fn mark( buffer: &mut Buffer, state: &mut EditorState, command: Command )
 fn lines_list( buffer: &mut Buffer, state: &mut EditorState, command: Command )
         -> Result<(), RedError> {// {{{
     assert_eq!( 'l', command.operation );
-    placeholder( buffer, state, command )
+    let stdout = stdout();
+    let handle = stdout.lock();
+    let mut writer = BufWriter::new( handle );
+    let mut ch_written: usize = 0;
+    let line_prefix: &str;  // ! to indicate unknown screen size
+    let term_width: usize;
+    let term_height: usize;
+    if let Some((w, h)) = term_size::dimensions() {
+        line_prefix = "";
+        term_width = w;
+        term_height = h;
+    } else {
+        line_prefix = "!";
+        term_width = 0;
+        term_height = 0;
+    }
+    for line_num in command.address_initial .. command.address_final + 1 {
+        let line = buffer.get_line_content( line_num ).unwrap_or("");
+        try!( writer.write( line_prefix.as_bytes() )
+              .map_err(|_| RedError::Stdout));
+        ch_written += line_prefix.len();
+        for ch in line.chars() {
+            for _ch in ch.escape_default() {
+                try!( writer.write( &[_ch as u8] ).map_err(|_| RedError::Stdout));
+                ch_written += 1;
+                if line_prefix.len() == 0 && ch_written ==
+                    ( term_width - line_prefix.len() ) * ( term_height - 1 ) {
+                    try!( writer.flush().map_err(|_| RedError::Stdout));
+                    prompt_for_more( &mut writer );
+                }
+            }
+        }
+        try!( writer.write( "$\n".as_bytes() ).map_err(|_| RedError::Stdout));
+        ch_written += 1;
+        ch_written += term_width - ( ch_written % term_width );
+        try!( writer.flush().map_err(|_| RedError::Stdout));
+    }
+    Ok( () )
 }//}}}
+/// Prompts the user to press enter and waits until they do// {{{
+fn prompt_for_more( stdout_writer: &mut BufWriter<StdoutLock> ) {// {{{
+    stdout_writer.write( "--<press enter to continue>--".as_bytes() )
+        .expect( "prompt_for_more: error writing to stdout" );
+    stdout_writer.flush().expect( "prompt_for_more: error writing to stdout" );
+    let stdin = stdin();
+    let mut handle = stdin.lock();
+    let mut buf = String::new();
+    handle.read_line( &mut buf ).expect( "error reading keystroke" );
+    stdout_writer.write( &['\n' as u8] )
+        .expect( "prompt_for_more: error writing to stdout" );
+}// }}}
+// }}}
 fn move_lines( buffer: &mut Buffer, state: &mut EditorState, command: Command )
         -> Result<(), RedError> {// {{{
     assert_eq!( 'm', command.operation );

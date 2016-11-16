@@ -616,7 +616,7 @@ fn temp_file_name( file_name: Option<&str> ) -> Result<String, RedError> {// {{{
             let path: PathBuf;
             match fs::canonicalize(f).map_err(|e| RedError::FileExist(e)) {
                 Ok(x) => path = x,
-                Err(e) => path = PathBuf::from(f),
+                Err(_) => path = PathBuf::from(f),
             }
             let parent: &str;
             match path.parent() {
