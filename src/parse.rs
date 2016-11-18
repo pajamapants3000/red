@@ -103,6 +103,7 @@ fn get_address_range( address_string: &str, buffer: &Buffer )// {{{
         "%" => ( "0", "$" ),
         "," => ( "0", "$" ),
         ";" => ( ".", "$" ),
+        ""  => ( "0", "0" ),
         _ => parse_address_list( address_string ),
     };
 
@@ -154,8 +155,6 @@ fn parse_address_list( address_string: &str ) -> (&str, &str) {// {{{
 fn normalize_line_num( buffer: &Buffer, line_num: usize ) -> usize {// {{{
     if line_num > buffer.num_lines() {
         buffer.num_lines()
-    } else if line_num < 1 {
-        1
     } else {
         line_num
     }
@@ -242,7 +241,7 @@ fn parse_address_field( address: &str, buffer: &Buffer )// {{{
     let re_marker:    Regex = Regex::new( ADDR_REGEX_MARKER    ).unwrap();
     if address.len() == 0 {         // no address provided - use current
         Ok( Some( buffer.get_current_line_number() ))
-    } else if address.len() == 1 {  // single character provided as address
+    } else if address.len() == 1 && address != "+" && address != "-" {
         match address {
             "." => {
                 Ok( Some( buffer.get_current_line_number() ))

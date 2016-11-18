@@ -15,8 +15,8 @@ use std::io::{BufReader, BufWriter, stdout};
 use std::fs::{self, File, copy, rename};
 use std::path::{Path, PathBuf};
 use std::collections::LinkedList;
-use std::collections::linked_list::{Iter, IterMut};
-use std::iter::{IntoIterator, FromIterator, Iterator};
+use std::collections::linked_list::{self, Iter, IterMut};
+use std::iter::{IntoIterator, FromIterator, Iterator, Take, Skip};
 use std::{thread, time};
 use std::ffi::OsStr;
 
@@ -167,6 +167,11 @@ impl Buffer {   //{{{
         self._is_modified
     }// }}}
 // }}}
+    /// Return true if buffer modified since last write// {{{
+    pub fn set_modified( &mut self, is_modified: bool ) {// {{{
+        self._is_modified = is_modified;
+    }// }}}
+// }}}
     // later, change approach to homogenize file/stdout source
     // generate iterator over BufRead object, either file, stdout, or empty
     /// Return the linked-list of lines to store in buffer// {{{
@@ -211,7 +216,10 @@ impl Buffer {   //{{{
 // }}}
     /// Return single line// {{{
     ///
-    /// change to Result instead of Option?
+    /// TODO: This is a terrible approach - you have direct
+    /// access to the private members, don't waste a function
+    /// call! Plus the iteration... should be able to find a
+    /// better way.
     pub fn get_line_content( &self, line: usize ) -> Option<&str> {// {{{
         let mut lines_iter = self.lines_iterator();
         let mut _line: usize = 1;
@@ -232,11 +240,49 @@ impl Buffer {   //{{{
         Some(result)
     }// }}}
 // }}}
-    /// Return iterator over lines in buffer// {{{
+    /// Return iterator over range of lines in buffer// {{{
     ///
-    /// works in reverse with next_back?
-    pub fn lines_iterator( &self ) -> Iter<String> {// {{{
+    pub fn range_iterator<'a>( &'a self, address_initial: usize,// {{{
+                           address_final: usize ) -> Take<
+            Skip<linked_list::Iter<'a, String> >> {
+        // Make sure caller did their job!
+        assert_addresses( address_initial, address_final, self.total_lines );
+        // now let's do ours...
+        let lines_ref: &'a LinkedList<String> = &self.lines;
+        lines_ref.into_iter()
+            .skip( address_initial - 1 )
+            .take(( address_final + 1 ) - address_initial )
+    }// }}}
+// }}}
+    /// Return mutable iterator over range of lines in buffer// {{{
+    ///
+    /// This poses a problem - how do we keep track of modifications?
+    /// we might want to eliminate this.
+    pub fn mut_range_iterator<'a>( &'a mut self, address_initial: usize,// {{{
+                           address_final: usize ) -> Take<
+            Skip<linked_list::IterMut<'a, String> >> {
+        // Make sure caller did their job!
+        assert_addresses( address_initial, address_final, self.total_lines );
+        // now let's do ours...
+        let lines_ref: &'a mut LinkedList<String> = &mut self.lines;
+        lines_ref.into_iter()
+            .skip( address_initial - 1 )
+            .take(( address_final + 1 ) - address_initial )
+    }// }}}
+// }}}
+    /// Return iterator over all lines in buffer// {{{
+    ///
+    pub fn lines_iterator( &self ) -> Iter<String> {
         let lines_ref: &LinkedList<String> = &self.lines;
+        lines_ref.into_iter()
+    }// }}}
+// }}}
+    /// Return mutable iterator over lines in buffer// {{{
+    ///
+    /// This poses a problem - how do we keep track of modifications?
+    /// we might want to eliminate this.
+    pub fn mut_lines_iterator( &mut self ) -> IterMut<String> {// {{{
+        let mut lines_ref: &mut LinkedList<String> = &mut self.lines;
         lines_ref.into_iter()
     }// }}}
 // }}}
@@ -276,6 +322,7 @@ impl Buffer {   //{{{
         self.lines.append( &mut back );
         self.delete_update_markers( line_num );
         self.total_lines -= 1; // previous tests preclude underflow here?
+        self._is_modified = true;
         Ok( () )
     }// }}}
 // }}}
@@ -291,11 +338,18 @@ impl Buffer {   //{{{
     ///
     /// TODO: Add error handling, Result<> return?
     pub fn insert_line( &mut self, line_num: usize, new_line: &str ) {// {{{
-        let mut back = self.lines.split_off( line_num - 1 );
+        let indx: usize;
+        if line_num == 0 {
+            indx = 0;
+        } else {
+            indx = line_num - 1;
+        }
+        let mut back = self.lines.split_off( indx );
         self.lines.push_back( new_line.to_string() );
         self.lines.append( &mut back );
-        self.set_current_line_number( line_num + 1 );
+        self.current_line = indx + 2;   // next line
         self.insert_update_markers( line_num );
+        self._is_modified = true;
         self.total_lines += 1;
     }// }}}
 // }}}
@@ -311,13 +365,8 @@ impl Buffer {   //{{{
         let _ = back_list.pop_front();
         self.lines.push_back( new_line.to_string() );
         self.lines.append( &mut back_list );
+        self._is_modified = true;
         Ok( () )
-    }// }}}
-// }}}
-    /// Return mutable iterator over lines in buffer// {{{
-    pub fn mut_lines_iterator( &mut self ) -> IterMut<String> {// {{{
-        let mut lines_ref: &mut LinkedList<String> = &mut self.lines;
-        lines_ref.into_iter()
     }// }}}
 // }}}
     /// Return current working line number// {{{
@@ -396,7 +445,7 @@ impl Buffer {   //{{{
         Ok( () )
     }// }}}
 // }}}
-    /// Save work to permanent file; behavior depends on file_mode argument// {{{
+    /// Save work to permanent file; behavior depends on do_append argument// {{{
     ///
     /// TODO: move to io.rs? I don't think so, it's a part of the
     /// functionality of the buffer
@@ -405,15 +454,22 @@ impl Buffer {   //{{{
     /// # Errors
     /// # Safety
     /// # Examples
-    fn _write_to_disk( &mut self, file_name: &str,// {{{
-                   file_mode: FileMode ) -> Result<(), RedError> {
-        try!( self.store_buffer() );
-        self.last_temp_write = UTC::now();
+    pub fn write_to_disk( &mut self, file_name: &str, do_append: bool,// {{{
+                   address_initial: usize, address_final: usize )
+                   -> Result<(), RedError> {
+        // Make sure caller did their job!
+        assert_addresses( address_initial, address_final, self.total_lines );
+        // now let's do ours...
+        let file_mode = FileMode{ f_write: !do_append, f_truncate: !do_append,
+                f_append: do_append, f_create: true, ..Default::default() };
+        if file_name.len() != 0 && self.file == None {
+            self.file = Some( file_name.to_string() );
+        }
         let _filename: &str = match file_name.len() {
             0 => {
                 match &self.file {
-                    &Some(ref x) => {
-                        x
+                    &Some(ref f) => {
+                        f
                     },
                     &None => {
                         println!("No file name chosen for save");
@@ -426,46 +482,19 @@ impl Buffer {   //{{{
             _ => file_name,
         };
         let mut file_opened = try!( file_opener( _filename, file_mode ));
-        let mut buf_file = try!( file_opener( &self.buffer_file,
-                      FileMode{ f_read: true, ..Default::default() }));
-        let mut buf: Vec<u8> = Vec::new();
-        buf_file.read_to_end( &mut buf );
-        file_opened.write( &mut buf );
-        self.last_write = UTC::now();
+        for line in self.range_iterator( address_initial, address_final ) {
+            try!( file_opened.write( line.as_bytes() )
+                  .map_err(|e| RedError::FileWrite(e) ));
+            try!( file_opened.write( &[b'\n'] )
+                  .map_err(|e| RedError::FileWrite(e) ));
+        }
+        if file_name == "" && address_initial == 1 &&
+                address_final == self.total_lines {
+            self.last_write = UTC::now();
+            self._is_modified = false;
+        }
         Ok( () )
 
-    }// }}}
-// }}}
-    /// Save work to permanent file; truncate existing contents// {{{
-    ///
-    /// TODO: move to io.rs? I don't think so, it's a part of the
-    /// functionality of the buffer
-    /// TODO: set up default filename?
-    /// # Panics
-    /// # Errors
-    /// # Safety
-    /// # Examples
-    pub fn write_to_disk( &mut self, file_name: &str )// {{{
-            -> Result<(), RedError> {
-        let file_mode = FileMode{ f_truncate: true, f_create: true,
-                ..Default::default() };
-        self._write_to_disk( file_name, file_mode )
-    }// }}}
-// }}}
-    /// Append work to permanent file// {{{
-    ///
-    /// TODO: move to io.rs? I don't think so, it's a part of the
-    /// functionality of the buffer
-    /// TODO: set up default filename?
-    /// # Panics
-    /// # Errors
-    /// # Safety
-    /// # Examples
-    pub fn append_to_disk( &mut self, file_name: &str )// {{{
-            -> Result<(), RedError> {
-        let file_mode = FileMode{ f_append: true, f_create: true,
-                ..Default::default() };
-        self._write_to_disk( file_name, file_mode )
     }// }}}
 // }}}
     /// Determine whether line matches regex// {{{

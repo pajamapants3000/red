@@ -220,11 +220,17 @@ fn filename( buffer: &mut Buffer, state: &mut EditorState, command: Command )
 fn global( buffer: &mut Buffer, state: &mut EditorState, command: Command )
         -> Result<(), RedError> {// {{{
     assert_eq!( 'g', command.operation );
+    let ( _initial, _final ) = default_lines( command.address_initial,
+                                              command.address_final,
+                                              1, buffer.num_lines() );
     placeholder( buffer, state, command )
 }//}}}
 fn global_interactive( buffer: &mut Buffer, state: &mut EditorState,//{{{
                        command: Command ) -> Result<(), RedError> {
     assert_eq!( 'G', command.operation );
+    let ( _initial, _final ) = default_lines( command.address_initial,
+                                              command.address_final,
+                                              1, buffer.num_lines() );
     placeholder( buffer, state, command )
 }//}}}
 fn help_recall( buffer: &mut Buffer, state: &mut EditorState, command: Command )
@@ -253,7 +259,12 @@ fn join( buffer: &mut Buffer, state: &mut EditorState, command: Command )
         -> Result<(), RedError> {// {{{
     assert_eq!( 'j', command.operation );
     let mut new_line = String::new();
-    for line in command.address_initial .. command.address_final + 1 {
+    let ( _initial, _final ) = default_lines( command.address_initial,
+                                              command.address_final,
+                                              buffer.get_current_line_number(),
+                                          buffer.get_current_line_number() + 1,
+                                            );
+    for line in _initial .. _final + 1 {
         match buffer.get_line_content( line ) {
             Some(x) => {
                 new_line.push_str( &x );
@@ -262,11 +273,11 @@ fn join( buffer: &mut Buffer, state: &mut EditorState, command: Command )
         }
     }
     try!( delete( buffer, state, Command{
-        address_initial: command.address_initial,
-        address_final: command.address_final,
+        address_initial: _initial,
+        address_final: _final,
         operation: 'd', parameters: "" } ));
-    buffer.set_current_line_number( command.address_initial );
-    buffer.insert_here( &new_line );
+    buffer.insert_line( _initial, &new_line );
+    buffer.set_current_line_number( _initial );
     try!( buffer.store_buffer() );
     Ok( () )
 }//}}}
@@ -384,14 +395,21 @@ fn move_lines( buffer: &mut Buffer, state: &mut EditorState, command: Command )
 fn print_numbered( buffer: &mut Buffer, state: &mut EditorState,//{{{
                    command: Command ) -> Result<(), RedError> {
     assert_eq!( 'n', command.operation );
-    let mut indx: usize = 0;
+    let ( _initial, _final ) = default_lines( command.address_initial,
+                                              command.address_final,
+                                              buffer.get_current_line_number(),
+                                              buffer.get_current_line_number()
+                                                );
     let num_lines_f: f64 = buffer.num_lines() as f64 + 1.0_f64;
     let _width = num_lines_f.log10().ceil() as usize;
-    for _line in buffer.lines_iterator() {
-        indx += 1;
-        print!( "{:width$}|", indx, width = _width );
+    for ( _num, _line ) in buffer.lines_iterator().enumerate()
+        .skip( _initial - 1 )
+        .take(( _final + 1 ) - _initial )
+        .map( |(x, y)| ( x+1, y )) {
+        print!( "{:width$}|", _num, width = _width );
         println!("{}", _line );
     }
+    buffer.set_current_line_number( _final );
     Ok( () )
 }//}}}
 /// Display range of lines of buffer in terminal // {{{
@@ -409,17 +427,16 @@ fn print_numbered( buffer: &mut Buffer, state: &mut EditorState,//{{{
 fn print( buffer: &mut Buffer, state: &mut EditorState, command: Command )//{{{
             -> Result<(), RedError> {
     assert_eq!( 'p', command.operation );
-    {   // XXX: just some random use of parms for now
-        if command.parameters == "heading" {
-            println!( "here's a heading" );
-            return Err( RedError::OpCharIndex );
-        }
-    }
-    for indx in command.address_initial .. ( command.address_final + 1 ) {
+    let ( _initial, _final ) = default_lines( command.address_initial,
+                                              command.address_final,
+                                              buffer.get_current_line_number(),
+                                              buffer.get_current_line_number()
+                                                );
+    for indx in _initial .. ( _final + 1 ) {
         println!("{}", buffer.get_line_content( indx ).expect(
                 "ops::print: called get_line_content on out-of-range line" ) );
     }
-    buffer.set_current_line_number( command.address_final );
+    buffer.set_current_line_number( _final );
     // TODO: Drop this? Or Keep to avoid unused warnings?
     state.mode = EditorMode::Command;
     Ok( () )
@@ -442,6 +459,9 @@ fn quit( buffer: &mut Buffer, state: &mut EditorState, command: Command )//{{{
 fn read( buffer: &mut Buffer, state: &mut EditorState, command: Command )
         -> Result<(), RedError> {// {{{
     assert_eq!( 'r', command.operation );
+    let ( _initial, _final ) = default_lines( command.address_initial,
+                                              command.address_final,
+                                              1, buffer.num_lines() );
     placeholder( buffer, state, command )
 }//}}}
 fn substitute( buffer: &mut Buffer, state: &mut EditorState, command: Command )
@@ -462,11 +482,17 @@ fn undo( buffer: &mut Buffer, state: &mut EditorState, command: Command )
 fn global_reverse( buffer: &mut Buffer, state: &mut EditorState,//{{{
                    command: Command ) -> Result<(), RedError> {
     assert_eq!( 'v', command.operation );
+    let ( _initial, _final ) = default_lines( command.address_initial,
+                                              command.address_final,
+                                              1, buffer.num_lines() );
     placeholder( buffer, state, command )
 }//}}}
 fn global_reverse_interactive( buffer: &mut Buffer, state: &mut EditorState,//{{{
                                command: Command ) -> Result<(), RedError> {
     assert_eq!( 'V', command.operation );
+    let ( _initial, _final ) = default_lines( command.address_initial,
+                                              command.address_final,
+                                              1, buffer.num_lines() );
     placeholder( buffer, state, command )
 }//}}}
 /// Write buffer to file// {{{
@@ -475,14 +501,40 @@ fn write_to_disk( buffer: &mut Buffer, state: &mut EditorState,//{{{
     assert_eq!( 'w', command.operation );
     // TODO: Drop this? Or Keep to avoid unused warnings?
     state.mode = EditorMode::Command;
-    buffer.write_to_disk( command.parameters )
+    let ( _initial, _final ) = default_lines( command.address_initial,
+                                              command.address_final,
+                                              1, buffer.num_lines() );
+    buffer.write_to_disk( command.parameters, false, _initial, _final )
 }// }}}
 // }}}
 fn append_to_disk( buffer: &mut Buffer, state: &mut EditorState,//{{{
                    command: Command ) -> Result<(), RedError> {
     assert_eq!( 'W', command.operation );
-    buffer.append_to_disk( command.parameters )
+    // TODO: Drop this? Or Keep to avoid unused warnings?
+    state.mode = EditorMode::Command;
+    let ( _initial, _final ) = default_lines( command.address_initial,
+                                              command.address_final,
+                                              1, buffer.num_lines() );
+    buffer.write_to_disk( command.parameters, true, _initial, _final )
 }//}}}
+
+/// Return pair of lines, either original or the specified defaults
+///
+/// Defaults are used if both original integers are 0;
+/// Also fixes lower address to be 1 instead of zero if an otherwise
+/// suitable range is provided;
+fn default_lines( _initial: usize, _final: usize,
+                  default_i: usize, default_f: usize ) -> ( usize, usize ) {
+    if _initial == 0 {
+        if _final == 0 {
+            ( default_i, default_f )
+        } else {
+            ( 1, _final )
+        }
+    } else {
+        ( _initial, _final )
+    }
+}
 
 // ^^^ Functions ^^^ }}}
 

@@ -67,6 +67,13 @@ pub fn error_code( _error: RedError ) -> u32 {
     }
 }
 //}}}
-
+/// Catch improper address arguments// {{{
+pub fn assert_addresses( address_initial: usize, address_final: usize,// {{{
+                     total_lines: usize ) {
+        assert!( 0 < address_initial && address_initial <= total_lines );
+        assert!( 0 < address_final && address_final <= total_lines );
+        assert!( address_initial <= address_final );
+}// }}}
+// }}}
 // ^^^ Functions ^^^ }}}
 
