@@ -135,8 +135,12 @@ fn placeholder( buffer: &mut Buffer, state: &mut EditorState,//{{{
 fn append( buffer: &mut Buffer, state: &mut EditorState, command: Command )
         -> Result<(), RedError> {// {{{
     assert_eq!( 'a', command.operation );
-    // append is the default/natural line-insert behavior
-    buffer.set_current_line_number( command.address_final );
+    let ( _initial, _final ) = default_lines( command.address_initial,
+                                              command.address_final,
+                                              buffer.get_current_line_number(),
+                                              buffer.get_current_line_number(),
+                                            );
+    buffer.set_current_line_number( _final );
     state.mode = EditorMode::Insert;
     Ok( () )
 }//}}}
@@ -144,12 +148,15 @@ fn append( buffer: &mut Buffer, state: &mut EditorState, command: Command )
 fn change( buffer: &mut Buffer, state: &mut EditorState, command: Command )
         -> Result<(), RedError> {// {{{
     assert_eq!( 'c', command.operation );
-    let delete_command = Command{ address_initial: command.address_initial,
-            address_final: command.address_final, operation: 'd',
-            parameters: ""  };
-    let insert_command = Command{ address_initial: command.address_initial,
-            address_final: command.address_initial, operation: 'i',
-            parameters: ""  };
+    let ( _initial, _final ) = default_lines( command.address_initial,
+                                              command.address_final,
+                                              buffer.get_current_line_number(),
+                                              buffer.get_current_line_number(),
+                                            );
+    let delete_command = Command{ address_initial: _initial,
+            address_final: _final, operation: 'd', parameters: ""  };
+    let insert_command = Command{ address_initial: _initial,
+            address_final: _initial, operation: 'i', parameters: ""  };
     try!( delete( buffer, state, delete_command ) );
     insert( buffer, state, insert_command )
 }//}}}
@@ -157,10 +164,16 @@ fn change( buffer: &mut Buffer, state: &mut EditorState, command: Command )
 fn delete( buffer: &mut Buffer, state: &mut EditorState, command: Command )
         -> Result<(), RedError> {// {{{
     assert_eq!( 'd', command.operation );
-    for _ in command.address_initial .. ( command.address_final + 1 ) {
+    let ( _initial, _final ) = default_lines( command.address_initial,
+                                              command.address_final,
+                                              buffer.get_current_line_number(),
+                                              buffer.get_current_line_number(),
+                                            );
+    for _ in _initial .. ( _final + 1 ) {
         // NOTE: lines move as you delete them - don't increment!
-        try!( buffer.delete_line( command.address_initial ) );
+        try!( buffer.delete_line( _initial ) );
     }
+    buffer.set_current_line_number( _initial - 1 );
     Ok( () )
 }//}}}
 fn edit( buffer: &mut Buffer, state: &mut EditorState, command: Command )
@@ -250,8 +263,12 @@ fn help_tgl( buffer: &mut Buffer, state: &mut EditorState, command: Command )
 fn insert( buffer: &mut Buffer, state: &mut EditorState, command: Command )
         -> Result<(), RedError> {// {{{
     assert_eq!( 'i', command.operation );
-    // append is the default/natural line-insert behavior
-    buffer.set_current_line_number( command.address_final );
+    let ( _initial, _final ) = default_lines( command.address_initial,
+                                              command.address_final,
+                                              buffer.get_current_line_number(),
+                                              buffer.get_current_line_number(),
+                                            );
+    buffer.set_current_line_number( _final - 1 );
     state.mode = EditorMode::Insert;
     Ok( () )
 }//}}}
@@ -284,6 +301,11 @@ fn join( buffer: &mut Buffer, state: &mut EditorState, command: Command )
 fn mark( buffer: &mut Buffer, state: &mut EditorState, command: Command )
         -> Result<(), RedError> {// {{{
     assert_eq!( 'k', command.operation );
+    let ( _initial, _final ) = default_lines( command.address_initial,
+                                              command.address_final,
+                                              buffer.get_current_line_number(),
+                                              buffer.get_current_line_number(),
+                                            );
     // make sure we have been provided a single character for the mark
     let param_len = command.parameters.len();
     if param_len > 1 || param_len == 0 {
@@ -309,13 +331,18 @@ fn mark( buffer: &mut Buffer, state: &mut EditorState, command: Command )
         },
     };
     // if given a section of lines, mark the beginning
-    buffer.set_marker( command.address_initial, mark_char );
+    buffer.set_marker( _final, mark_char );
     Ok( () )
 
 }//}}}
 fn lines_list( buffer: &mut Buffer, state: &mut EditorState, command: Command )
         -> Result<(), RedError> {// {{{
     assert_eq!( 'l', command.operation );
+    let ( _initial, _final ) = default_lines( command.address_initial,
+                                              command.address_final,
+                                              buffer.get_current_line_number(),
+                                              buffer.get_current_line_number(),
+                                            );
     let stdout = stdout();
     let handle = stdout.lock();
     let mut writer = BufWriter::new( handle );
@@ -332,7 +359,7 @@ fn lines_list( buffer: &mut Buffer, state: &mut EditorState, command: Command )
         term_width = 0;
         term_height = 0;
     }
-    for line_num in command.address_initial .. command.address_final + 1 {
+    for line_num in _initial .. _final + 1 {
         let line = buffer.get_line_content( line_num ).unwrap_or("");
         try!( writer.write( line_prefix.as_bytes() )
               .map_err(|_| RedError::Stdout));
@@ -371,25 +398,38 @@ fn prompt_for_more( stdout_writer: &mut BufWriter<StdoutLock> ) {// {{{
 fn move_lines( buffer: &mut Buffer, state: &mut EditorState, command: Command )
         -> Result<(), RedError> {// {{{
     assert_eq!( 'm', command.operation );
-    let mut destination: usize = match command.parameters.parse() {
-        Ok(x) => x,
-        Err(_) => 0,
-    };
-    destination += 1;           // we want to append at this line
+    let destination: usize;
+    let ( _initial, _final ) = default_lines( command.address_initial,
+                                              command.address_final,
+                                              buffer.get_current_line_number(),
+                                              buffer.get_current_line_number(),
+                                            );
+    if command.parameters == "0" {
+        destination = 0;
+    } else {
+    destination = try!(parse_address_field( command.parameters, buffer ))
+            .unwrap_or(buffer.get_current_line_number() );
+    }
     let mut offset: usize = 0;
     let mut line: String;
-    for line_num in command.address_initial .. command.address_final + 1 {
+    let mut _destination = destination;
+    for line_num in _initial .. _final + 1 {
+        if line_num == destination + 1 {
+            _destination += _final - destination;
+            break;
+        }
         line = buffer.get_line_content( line_num - offset )
             .unwrap_or("").to_string();
         try!( buffer.delete_line( line_num - offset ));
-        if ( line_num - offset ) > destination {
-            buffer.insert_line( destination, &line );
+        if ( line_num - offset ) > _destination {
+            buffer.insert_line( _destination, &line );
         } else {
             offset += 1;
-            buffer.insert_line( destination - offset, &line );
+            buffer.insert_line( _destination - offset, &line );
         }
-        destination += 1;
+        _destination += 1;
     }
+    buffer.set_current_line_number( _destination - offset );
     Ok( () )
 }//}}}
 fn print_numbered( buffer: &mut Buffer, state: &mut EditorState,//{{{

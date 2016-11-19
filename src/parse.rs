@@ -100,10 +100,10 @@ pub fn parse_command<'a>( _cmd_input: &'a str, buffer: &Buffer,// {{{
 fn get_address_range( address_string: &str, buffer: &Buffer )// {{{
             -> Result<(usize, usize), RedError> {
     let (left, right) = match address_string {
-        "%" => ( "0", "$" ),
-        "," => ( "0", "$" ),
+        "%" => ( "1", "$" ),
+        "," => ( "1", "$" ),
         ";" => ( ".", "$" ),
-        ""  => ( "0", "0" ),
+        ""  => ( "", "" ),
         _ => parse_address_list( address_string ),
     };
 
@@ -155,6 +155,8 @@ fn parse_address_list( address_string: &str ) -> (&str, &str) {// {{{
 fn normalize_line_num( buffer: &Buffer, line_num: usize ) -> usize {// {{{
     if line_num > buffer.num_lines() {
         buffer.num_lines()
+    } else if line_num < 1 {
+        1
     } else {
         line_num
     }
@@ -233,14 +235,14 @@ fn calc_address_field( address: &str, buffer: &Buffer )// {{{
 }// }}}
 // }}}
 /// Parse address field; convert regex or integer into line number// {{{
-fn parse_address_field( address: &str, buffer: &Buffer )// {{{
+pub fn parse_address_field( address: &str, buffer: &Buffer )// {{{
             -> Result<Option<usize>, RedError> {
     let re_fwdsearch: Regex = Regex::new( ADDR_REGEX_FWDSEARCH ).unwrap();
     let re_revsearch: Regex = Regex::new( ADDR_REGEX_REVSEARCH ).unwrap();
     let re_rithmetic: Regex = Regex::new( ADDR_REGEX_RITHMETIC ).unwrap();
     let re_marker:    Regex = Regex::new( ADDR_REGEX_MARKER    ).unwrap();
-    if address.len() == 0 {         // no address provided - use current
-        Ok( Some( buffer.get_current_line_number() ))
+    if address.len() == 0 {         // no address provided - use default
+        Ok( Some( 0 ))  // will be interpreted as default by operation
     } else if address.len() == 1 && address != "+" && address != "-" {
         match address {
             "." => {

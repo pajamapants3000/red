@@ -337,18 +337,12 @@ impl Buffer {   //{{{
     /// Insert new line// {{{
     ///
     /// TODO: Add error handling, Result<> return?
-    pub fn insert_line( &mut self, line_num: usize, new_line: &str ) {// {{{
-        let indx: usize;
-        if line_num == 0 {
-            indx = 0;
-        } else {
-            indx = line_num - 1;
-        }
-        let mut back = self.lines.split_off( indx );
+    pub fn insert_line( &mut self, address: usize, new_line: &str ) {// {{{
+        let mut back = self.lines.split_off( address );
         self.lines.push_back( new_line.to_string() );
         self.lines.append( &mut back );
-        self.current_line = indx + 2;   // next line
-        self.insert_update_markers( line_num );
+        self.current_line = address + 1;   // next line
+        self.insert_update_markers( address );
         self._is_modified = true;
         self.total_lines += 1;
     }// }}}
