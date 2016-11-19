@@ -29,16 +29,25 @@ const ADDR_REGEX_REVSEARCH: &'static str = r#"\?([^\?]*)\?"#;
 const ADDR_REGEX_RITHMETIC: &'static str = r#"(\d*|.|$)(((\+|-)(\d*))+)"#;
 const ADDR_REGEX_ADDORSUBT: &'static str = r#"((\+|-)(\d*))(((\+|-)(\d*))*)"#;
 const ADDR_REGEX_MARKER:    &'static str = r#"'([:lower:])"#;
+const SUB_REGEX_PARAMETER:  &'static str = r#"/(.*)/(.*)/(.*)"#;
 
 // ^^^ Constants ^^^ }}}
 // *** Data Structures *** {{{
-pub struct Command<'a> {
+pub struct Command<'a> {// {{{
     pub address_initial: usize,
     pub address_final: usize,
     pub operation: char,
     pub parameters: &'a str,
+}// }}}
+pub struct Substitution {// {{{
+    pub to_match: String,
+    pub to_sub:   String,
+    pub which: WhichMatch,
+}// }}}
+pub enum WhichMatch {
+    Number( usize ),
+    Global,
 }
-
 // ^^^ Data Structures ^^^ }}}
 
 // *** Functions *** {{{
@@ -279,6 +288,50 @@ pub fn parse_address_field( address: &str, buffer: &Buffer )// {{{
             }
         }
     }
+}// }}}
+// }}}
+/// Parse substitution parameter into separate parts// {{{
+pub fn parse_substitution_parameter( sub_parm: &str )// {{{
+    -> Result<Substitution, RedError> {
+    let re_sub_parm: Regex = Regex::new( SUB_REGEX_PARAMETER ).unwrap();
+    match re_sub_parm.captures( sub_parm ) {
+        Some( cap ) => {
+            Ok( Substitution {
+                    to_match: match cap.at(1) {
+                        Some(x) => x.to_string(),
+                        None => return Err( RedError::ParameterSyntax{
+                            parameter: sub_parm.to_string() }),
+                    },
+                    to_sub: match cap.at(2) {
+                        Some(x) => x.to_string(),
+                        None => return Err( RedError::ParameterSyntax{
+                            parameter: sub_parm.to_string() }),
+                    },
+                    which: match cap.at(3) {
+                        Some(x) => {
+                            if x == "g" {
+                                WhichMatch::Global
+                            } else {
+                                WhichMatch::Number( try!( x.parse().map_err(|_|
+                                      RedError::ParameterSyntax{
+                                          parameter: sub_parm.to_string() })))
+                            }
+                        },
+                        None => return Err( RedError::ParameterSyntax{
+                            parameter: sub_parm.to_string() }),
+                    }
+            })
+        },
+        None => return Err( RedError::ParameterSyntax{
+            parameter: sub_parm.to_string() }),
+    }
+}// }}}
+// }}}
+/// Replace regex capture references with the captures// {{{
+pub fn sub_captures( original: &str, captures: Captures )// {{{
+    -> String {
+    let result: String = original.to_string();
+    result      // for now
 }// }}}
 // }}}
 /// Find index of operation code in string

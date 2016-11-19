@@ -5,5 +5,5 @@
 * // and ?? repeat last search
 * replace "line_number" with "address" as in "set_line_number"
 * replace "insert_here" and "insert_line" with "append..."
-
+* accept escaped '/' and '?' in fwd and rev regex searches, respectively
 

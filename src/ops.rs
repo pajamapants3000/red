@@ -23,6 +23,8 @@ use std::collections::hash_map::HashMap;
 use std::process::exit;
 use std::io::{Write, BufRead, BufWriter, stdout, StdoutLock, stdin};
 
+use regex::{Regex, Captures};
+
 use buf::*;
 use error::*;
 use parse::*;
@@ -507,6 +509,38 @@ fn read( buffer: &mut Buffer, state: &mut EditorState, command: Command )
 fn substitute( buffer: &mut Buffer, state: &mut EditorState, command: Command )
         -> Result<(), RedError> {// {{{
     assert_eq!( 's', command.operation );
+    let ( _initial, _final ) = default_lines( command.address_initial,
+                                              command.address_final,
+                                              buffer.get_current_line_number(),
+                                              buffer.get_current_line_number(),
+                                            );
+    let sub_parms: Substitution = try!( parse_substitution_parameter(
+            command.parameters ));
+    let re = Regex::new( &sub_parms.to_match ).unwrap();
+    for line in _initial .. _final + 1 {
+        let new_line: String = String::new();
+        let line_content = buffer.get_line_content( line )
+            .expect("Line outside range");
+        let all_matches = re.find_iter( line_content );
+        let all_captures = re.captures_iter( line_content );
+        let _capture: Captures;
+        let count: usize = 0;
+        loop {
+            count += 1;
+            match all_matches.next() {
+                Some(x) => {
+                    _capture = all_captures.next()
+                        .expect("Fewer captures than matches ...?");
+                    // FIXME: has to be some kind of pattern match
+                    if sub_parms.which == WhichMatch::Number(count) ||
+                        sub_parms.which == WhichMatch::Global {
+                        // TODO: construct new_line
+                    }
+                }
+                None => break,
+            }
+        }
+    }
     placeholder( buffer, state, command )
 }//}}}
 fn transfer( buffer: &mut Buffer, state: &mut EditorState, command: Command )
