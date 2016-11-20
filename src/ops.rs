@@ -400,7 +400,7 @@ fn prompt_for_more( stdout_writer: &mut BufWriter<StdoutLock> ) {// {{{
 fn move_lines( buffer: &mut Buffer, state: &mut EditorState, command: Command )
         -> Result<(), RedError> {// {{{
     assert_eq!( 'm', command.operation );
-    let destination: usize;
+    let mut destination: usize;
     let ( _initial, _final ) = default_addrs( command.address_initial,
                                               command.address_final,
                                               buffer.get_current_line_number(),
@@ -412,26 +412,11 @@ fn move_lines( buffer: &mut Buffer, state: &mut EditorState, command: Command )
     destination = try!(parse_address_field( command.parameters, buffer ))
             .unwrap_or(buffer.get_current_line_number() );
     }
-    let mut offset: usize = 0;
-    let mut line: String;
-    let mut _destination = destination;
-    for line_num in _initial .. _final + 1 {
-        if line_num == destination + 1 {
-            _destination += _final - destination;
-            break;
-        }
-        line = buffer.get_line_content( line_num - offset )
-            .unwrap_or("").to_string();
-        try!( buffer.delete_line( line_num - offset ));
-        if ( line_num - offset ) > _destination {
-            buffer.insert_line( _destination, &line );
-        } else {
-            offset += 1;
-            buffer.insert_line( _destination - offset, &line );
-        }
-        _destination += 1;
+    try!( buffer.move_lines( &_initial, &_final, &destination ));
+    if (_initial-1) <= destination && destination <= _final {
+        destination = _initial - 1;
     }
-    buffer.set_current_line_number( _destination - offset );
+    buffer.set_current_line_number( destination + 1 + ( _final - _initial ) );
     Ok( () )
 }//}}}
 fn print_numbered( buffer: &mut Buffer, state: &mut EditorState,//{{{

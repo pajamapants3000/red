@@ -699,6 +699,32 @@ impl Buffer {   //{{{
         self.set_line_content( address, &new_line );
         // Approach 2 - repeat the above match on sub_parms.which
     }// }}}
+    pub fn move_lines( &mut self, address_initial: &usize,// {{{
+                       address_final: &usize, destination: &usize )
+            -> Result<(), RedError> {
+        let mut _initial:usize = *address_initial;
+        let mut _final:usize = *address_final;
+        let mut _destination:usize = *destination;
+        // no need to move anything if initial < dest < final
+        if (_initial-1) <= _destination && _destination <= _final {
+            return Ok( () );
+        }
+        let mut offset: usize = 0;
+        let mut line: String;
+        for line_num in _initial .. _final + 1 {
+            line = self.get_line_content( line_num - offset )
+                .unwrap_or("").to_string();
+            try!( self.delete_line( line_num - offset ));
+            if ( line_num - offset ) > _destination {
+                self.insert_line( _destination, &line );
+            } else {
+                offset += 1;
+                self.insert_line( _destination - offset, &line );
+            }
+            _destination += 1;
+        }
+        Ok( () )
+    }// }}}
 }   //}}}
 
 // ^^^ Data Structures ^^^ }}}
