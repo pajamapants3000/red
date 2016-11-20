@@ -137,7 +137,7 @@ fn placeholder( buffer: &mut Buffer, state: &mut EditorState,//{{{
 fn append( buffer: &mut Buffer, state: &mut EditorState, command: Command )
         -> Result<(), RedError> {// {{{
     assert_eq!( 'a', command.operation );
-    let ( _initial, _final ) = default_lines( command.address_initial,
+    let ( _initial, _final ) = default_addrs( command.address_initial,
                                               command.address_final,
                                               buffer.get_current_line_number(),
                                               buffer.get_current_line_number(),
@@ -150,7 +150,7 @@ fn append( buffer: &mut Buffer, state: &mut EditorState, command: Command )
 fn change( buffer: &mut Buffer, state: &mut EditorState, command: Command )
         -> Result<(), RedError> {// {{{
     assert_eq!( 'c', command.operation );
-    let ( _initial, _final ) = default_lines( command.address_initial,
+    let ( _initial, _final ) = default_addrs( command.address_initial,
                                               command.address_final,
                                               buffer.get_current_line_number(),
                                               buffer.get_current_line_number(),
@@ -166,7 +166,7 @@ fn change( buffer: &mut Buffer, state: &mut EditorState, command: Command )
 fn delete( buffer: &mut Buffer, state: &mut EditorState, command: Command )
         -> Result<(), RedError> {// {{{
     assert_eq!( 'd', command.operation );
-    let ( _initial, _final ) = default_lines( command.address_initial,
+    let ( _initial, _final ) = default_addrs( command.address_initial,
                                               command.address_final,
                                               buffer.get_current_line_number(),
                                               buffer.get_current_line_number(),
@@ -235,7 +235,7 @@ fn filename( buffer: &mut Buffer, state: &mut EditorState, command: Command )
 fn global( buffer: &mut Buffer, state: &mut EditorState, command: Command )
         -> Result<(), RedError> {// {{{
     assert_eq!( 'g', command.operation );
-    let ( _initial, _final ) = default_lines( command.address_initial,
+    let ( _initial, _final ) = default_addrs( command.address_initial,
                                               command.address_final,
                                               1, buffer.num_lines() );
     placeholder( buffer, state, command )
@@ -243,7 +243,7 @@ fn global( buffer: &mut Buffer, state: &mut EditorState, command: Command )
 fn global_interactive( buffer: &mut Buffer, state: &mut EditorState,//{{{
                        command: Command ) -> Result<(), RedError> {
     assert_eq!( 'G', command.operation );
-    let ( _initial, _final ) = default_lines( command.address_initial,
+    let ( _initial, _final ) = default_addrs( command.address_initial,
                                               command.address_final,
                                               1, buffer.num_lines() );
     placeholder( buffer, state, command )
@@ -265,7 +265,7 @@ fn help_tgl( buffer: &mut Buffer, state: &mut EditorState, command: Command )
 fn insert( buffer: &mut Buffer, state: &mut EditorState, command: Command )
         -> Result<(), RedError> {// {{{
     assert_eq!( 'i', command.operation );
-    let ( _initial, _final ) = default_lines( command.address_initial,
+    let ( _initial, _final ) = default_addrs( command.address_initial,
                                               command.address_final,
                                               buffer.get_current_line_number(),
                                               buffer.get_current_line_number(),
@@ -278,7 +278,7 @@ fn join( buffer: &mut Buffer, state: &mut EditorState, command: Command )
         -> Result<(), RedError> {// {{{
     assert_eq!( 'j', command.operation );
     let mut new_line = String::new();
-    let ( _initial, _final ) = default_lines( command.address_initial,
+    let ( _initial, _final ) = default_addrs( command.address_initial,
                                               command.address_final,
                                               buffer.get_current_line_number(),
                                           buffer.get_current_line_number() + 1,
@@ -303,7 +303,7 @@ fn join( buffer: &mut Buffer, state: &mut EditorState, command: Command )
 fn mark( buffer: &mut Buffer, state: &mut EditorState, command: Command )
         -> Result<(), RedError> {// {{{
     assert_eq!( 'k', command.operation );
-    let ( _initial, _final ) = default_lines( command.address_initial,
+    let ( _initial, _final ) = default_addrs( command.address_initial,
                                               command.address_final,
                                               buffer.get_current_line_number(),
                                               buffer.get_current_line_number(),
@@ -340,7 +340,7 @@ fn mark( buffer: &mut Buffer, state: &mut EditorState, command: Command )
 fn lines_list( buffer: &mut Buffer, state: &mut EditorState, command: Command )
         -> Result<(), RedError> {// {{{
     assert_eq!( 'l', command.operation );
-    let ( _initial, _final ) = default_lines( command.address_initial,
+    let ( _initial, _final ) = default_addrs( command.address_initial,
                                               command.address_final,
                                               buffer.get_current_line_number(),
                                               buffer.get_current_line_number(),
@@ -401,7 +401,7 @@ fn move_lines( buffer: &mut Buffer, state: &mut EditorState, command: Command )
         -> Result<(), RedError> {// {{{
     assert_eq!( 'm', command.operation );
     let destination: usize;
-    let ( _initial, _final ) = default_lines( command.address_initial,
+    let ( _initial, _final ) = default_addrs( command.address_initial,
                                               command.address_final,
                                               buffer.get_current_line_number(),
                                               buffer.get_current_line_number(),
@@ -437,7 +437,7 @@ fn move_lines( buffer: &mut Buffer, state: &mut EditorState, command: Command )
 fn print_numbered( buffer: &mut Buffer, state: &mut EditorState,//{{{
                    command: Command ) -> Result<(), RedError> {
     assert_eq!( 'n', command.operation );
-    let ( _initial, _final ) = default_lines( command.address_initial,
+    let ( _initial, _final ) = default_addrs( command.address_initial,
                                               command.address_final,
                                               buffer.get_current_line_number(),
                                               buffer.get_current_line_number()
@@ -469,7 +469,7 @@ fn print_numbered( buffer: &mut Buffer, state: &mut EditorState,//{{{
 fn print( buffer: &mut Buffer, state: &mut EditorState, command: Command )//{{{
             -> Result<(), RedError> {
     assert_eq!( 'p', command.operation );
-    let ( _initial, _final ) = default_lines( command.address_initial,
+    let ( _initial, _final ) = default_addrs( command.address_initial,
                                               command.address_final,
                                               buffer.get_current_line_number(),
                                               buffer.get_current_line_number()
@@ -501,7 +501,7 @@ fn quit( buffer: &mut Buffer, state: &mut EditorState, command: Command )//{{{
 fn read( buffer: &mut Buffer, state: &mut EditorState, command: Command )
         -> Result<(), RedError> {// {{{
     assert_eq!( 'r', command.operation );
-    let ( _initial, _final ) = default_lines( command.address_initial,
+    let ( _initial, _final ) = default_addrs( command.address_initial,
                                               command.address_final,
                                               1, buffer.num_lines() );
     placeholder( buffer, state, command )
@@ -509,39 +509,16 @@ fn read( buffer: &mut Buffer, state: &mut EditorState, command: Command )
 fn substitute( buffer: &mut Buffer, state: &mut EditorState, command: Command )
         -> Result<(), RedError> {// {{{
     assert_eq!( 's', command.operation );
-    let ( _initial, _final ) = default_lines( command.address_initial,
+    let ( _initial, _final ) = default_addrs( command.address_initial,
                                               command.address_final,
                                               buffer.get_current_line_number(),
                                               buffer.get_current_line_number(),
                                             );
     let sub_parms: Substitution = try!( parse_substitution_parameter(
             command.parameters ));
-    let re = Regex::new( &sub_parms.to_match ).unwrap();
-    for line in _initial .. _final + 1 {
-        let new_line: String = String::new();
-        let line_content = buffer.get_line_content( line )
-            .expect("Line outside range");
-        let all_matches = re.find_iter( line_content );
-        let all_captures = re.captures_iter( line_content );
-        let _capture: Captures;
-        let count: usize = 0;
-        loop {
-            count += 1;
-            match all_matches.next() {
-                Some(x) => {
-                    _capture = all_captures.next()
-                        .expect("Fewer captures than matches ...?");
-                    // FIXME: has to be some kind of pattern match
-                    if sub_parms.which == WhichMatch::Number(count) ||
-                        sub_parms.which == WhichMatch::Global {
-                        // TODO: construct new_line
-                    }
-                }
-                None => break,
-            }
-        }
-    }
-    placeholder( buffer, state, command )
+    buffer.substitute( &sub_parms.to_match, &sub_parms.to_sub, sub_parms.which,
+                       state, _initial, _final );
+    Ok( () )
 }//}}}
 fn transfer( buffer: &mut Buffer, state: &mut EditorState, command: Command )
         -> Result<(), RedError> {// {{{
@@ -556,7 +533,7 @@ fn undo( buffer: &mut Buffer, state: &mut EditorState, command: Command )
 fn global_reverse( buffer: &mut Buffer, state: &mut EditorState,//{{{
                    command: Command ) -> Result<(), RedError> {
     assert_eq!( 'v', command.operation );
-    let ( _initial, _final ) = default_lines( command.address_initial,
+    let ( _initial, _final ) = default_addrs( command.address_initial,
                                               command.address_final,
                                               1, buffer.num_lines() );
     placeholder( buffer, state, command )
@@ -564,7 +541,7 @@ fn global_reverse( buffer: &mut Buffer, state: &mut EditorState,//{{{
 fn global_reverse_interactive( buffer: &mut Buffer, state: &mut EditorState,//{{{
                                command: Command ) -> Result<(), RedError> {
     assert_eq!( 'V', command.operation );
-    let ( _initial, _final ) = default_lines( command.address_initial,
+    let ( _initial, _final ) = default_addrs( command.address_initial,
                                               command.address_final,
                                               1, buffer.num_lines() );
     placeholder( buffer, state, command )
@@ -575,7 +552,7 @@ fn write_to_disk( buffer: &mut Buffer, state: &mut EditorState,//{{{
     assert_eq!( 'w', command.operation );
     // TODO: Drop this? Or Keep to avoid unused warnings?
     state.mode = EditorMode::Command;
-    let ( _initial, _final ) = default_lines( command.address_initial,
+    let ( _initial, _final ) = default_addrs( command.address_initial,
                                               command.address_final,
                                               1, buffer.num_lines() );
     buffer.write_to_disk( command.parameters, false, _initial, _final )
@@ -586,7 +563,7 @@ fn append_to_disk( buffer: &mut Buffer, state: &mut EditorState,//{{{
     assert_eq!( 'W', command.operation );
     // TODO: Drop this? Or Keep to avoid unused warnings?
     state.mode = EditorMode::Command;
-    let ( _initial, _final ) = default_lines( command.address_initial,
+    let ( _initial, _final ) = default_addrs( command.address_initial,
                                               command.address_final,
                                               1, buffer.num_lines() );
     buffer.write_to_disk( command.parameters, true, _initial, _final )
@@ -597,7 +574,7 @@ fn append_to_disk( buffer: &mut Buffer, state: &mut EditorState,//{{{
 /// Defaults are used if both original integers are 0;
 /// Also fixes lower address to be 1 instead of zero if an otherwise
 /// suitable range is provided;
-fn default_lines( _initial: usize, _final: usize,
+fn default_addrs( _initial: usize, _final: usize,
                   default_i: usize, default_f: usize ) -> ( usize, usize ) {
     if _initial == 0 {
         if _final == 0 {
@@ -611,5 +588,4 @@ fn default_lines( _initial: usize, _final: usize,
 }
 
 // ^^^ Functions ^^^ }}}
-
 

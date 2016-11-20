@@ -30,6 +30,7 @@ const ADDR_REGEX_RITHMETIC: &'static str = r#"(\d*|.|$)(((\+|-)(\d*))+)"#;
 const ADDR_REGEX_ADDORSUBT: &'static str = r#"((\+|-)(\d*))(((\+|-)(\d*))*)"#;
 const ADDR_REGEX_MARKER:    &'static str = r#"'([:lower:])"#;
 const SUB_REGEX_PARAMETER:  &'static str = r#"/(.*)/(.*)/(.*)"#;
+const SUB_REGEX_BACKREF:    &'static str = r#"\\([0-9])"#;
 
 // ^^^ Constants ^^^ }}}
 // *** Data Structures *** {{{
@@ -311,6 +312,8 @@ pub fn parse_substitution_parameter( sub_parm: &str )// {{{
                         Some(x) => {
                             if x == "g" {
                                 WhichMatch::Global
+                            } else if x == "" {
+                                WhichMatch::Number(1)
                             } else {
                                 WhichMatch::Number( try!( x.parse().map_err(|_|
                                       RedError::ParameterSyntax{
@@ -329,9 +332,31 @@ pub fn parse_substitution_parameter( sub_parm: &str )// {{{
 // }}}
 /// Replace regex capture references with the captures// {{{
 pub fn sub_captures( original: &str, captures: Captures )// {{{
-    -> String {
-    let result: String = original.to_string();
-    result      // for now
+        -> String {
+    let mut result: String = String::new();
+    let re = Regex::new( SUB_REGEX_BACKREF ).unwrap();
+    let mut count: usize = 0;
+    let mut last_end: usize = 0;
+    let mut orig_captures = re.captures_iter( original );
+    for ( start, end ) in re.find_iter( original ) {
+        count += 1;
+        match orig_captures.next() {
+            Some(cap) => {
+                result += &original[ last_end .. start ];
+                // unwraps assured by setup - panic is reasonable here
+                // may want to replace with expect
+                match captures.at( cap.at(1).unwrap().parse().unwrap() ) {
+                    Some(x) => result += x,
+                    // or just leave as-is; already know cap.at(0) is not None
+                    None => result += cap.at(0).unwrap(),
+                };
+            },
+            None => break,
+        }
+        last_end = end;
+    }
+    result += &original[ last_end .. ];
+    result
 }// }}}
 // }}}
 /// Find index of operation code in string
@@ -497,6 +522,7 @@ fn is_in_regex( text: &str, indx: usize ) -> bool {// {{{
 mod tests {
     use super::{get_opchar_index, is_in_regex, parse_address_field, parse_address_list, get_address_range, is_address_separator};
     use buf::*;
+    use ::{EditorMode, EditorState};
 
     const COMMAND_CONTENT_LINE_1: &'static str = "testcmd";
     const COMMAND_CONTENT_LINE_2: &'static str = "testcmda testcmdb";
@@ -521,7 +547,8 @@ mod tests {
         let test_command = "echo -e ".to_string() +
                                     &test_lines( command_content_line,
                                     num_lines );
-        let mut buffer = Buffer::new( BufferInput::Command( test_command ));
+        let mut buffer = Buffer::new( BufferInput::Command( test_command ),
+                &EditorState{ mode: EditorMode::Command, help: true } ).unwrap();
         buffer.set_file_name( &test_file );
         buffer.set_current_line_number( 1 );
         buffer
@@ -529,7 +556,9 @@ mod tests {
     /// deconstruct buffer from "command buffer" test;
     /// any other necessary closing actions
     pub fn close_command_buffer_test( buffer: &mut Buffer ) {// {{{
-        buffer.destruct().unwrap();
+        buffer.set_modified( false );
+        buffer.destruct( EditorState{ mode: EditorMode::Command, help: true })
+            .unwrap();
     }// }}}
     // begin prep functions
     /// Generate and return string containing lines for testing

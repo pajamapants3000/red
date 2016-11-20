@@ -21,11 +21,12 @@ use std::{thread, time};
 use std::ffi::OsStr;
 
 use ::chrono::*;
-use ::regex::Regex;
+use ::regex::{Regex, Captures};
 use ::rand::{thread_rng, Rng};
 
 use io::*;
 use error::*;
+use parse::*;
 use ::{EditorState, print_help};
 
 // ^^^ Bring in to namespace ^^^ }}}
@@ -637,6 +638,67 @@ impl Buffer {   //{{{
         }
     }
 // }}}
+    /// make substitution in range of lines// {{{
+    pub fn substitute( &mut self, to_match: &str, to_sub: &str,// {{{
+                       which: WhichMatch, state: &EditorState,
+                       address_initial: usize, address_final: usize ) {
+        let re: Regex = Regex::new( to_match ).unwrap();
+        for line in address_initial .. address_final + 1 {
+            self._substitute_line( line, &re, to_sub, &which, state );
+        }
+    }// }}}
+// }}}
+    pub fn substitute_line( &mut self, address: usize, to_match: &str,// {{{
+                    to_sub: &str, which: WhichMatch, state: &EditorState ) {
+        let re: Regex = Regex::new( to_match ).unwrap();
+        self._substitute_line( address, &re, to_sub, &which, state );
+    }
+    fn _substitute_line( &mut self, address: usize, re_to_match: &Regex,// {{{
+                     to_sub: &str, which: &WhichMatch, state: &EditorState ) {
+        let mut new_line: String = String::new();
+        {   // create wrapping namespace
+            let line_content = self.get_line_content( address )
+                .expect("Line outside range"); // XXX: shouldn't be possible here!
+            let mut all_matches = re_to_match.find_iter( line_content );
+            let mut all_captures = re_to_match.captures_iter( line_content );
+            let mut _capture: Captures;
+            let mut to_sub_w_backrefs: String;
+            let mut count: usize = 0;
+            let mut last_end: usize = 0;
+            loop {
+                count += 1;
+                match all_matches.next() {
+                    Some(( start, end )) => {
+                        _capture = all_captures.next()
+                            .expect("Fewer captures than matches ...?");
+                        to_sub_w_backrefs = sub_captures( to_sub, _capture );
+                        match which {
+                            &WhichMatch::Number(n) => {
+                                if n == count {
+                                    new_line += &line_content[last_end..start];
+                                    new_line += &to_sub_w_backrefs;
+                                } else {
+                                    new_line += &line_content[last_end..end];
+                                }
+                            },
+                            &WhichMatch::Global => {
+                                new_line += &line_content[last_end..start];
+                                new_line += &to_sub_w_backrefs;
+                            },
+                        }
+                        last_end = end;
+                    },
+                    None => {
+                        new_line += &line_content[ last_end .. ];
+                        break;
+                    },
+                }
+            }
+        }
+        // Approach 1 - set line content regardless, sometimes to same
+        self.set_line_content( address, &new_line );
+        // Approach 2 - repeat the above match on sub_parms.which
+    }// }}}
 }   //}}}
 
 // ^^^ Data Structures ^^^ }}}
@@ -708,20 +770,23 @@ fn temp_file_name( file_name: Option<&str> ) -> Result<String, RedError> {// {{{
 #[cfg(test)]
 mod tests {// {{{
     //  ***     ***      Bring into namespace   ***     *** //// {{{
-    use std::process::Command;
+    use std::process;
     use std::fs;
     use std::io::Write;
     use std::default::Default;
 
+
+    use regex::{Regex, Captures};
     use super::*;
     use error::*;
     use io::*;
+    use parse::*;
+    use ::{EditorMode, EditorState};
     //  ^^^     ^^^     Bring into namespace    ^^^     ^^^ //// }}}
     //  ***     ***     Constants   ***     ***     //// {{{
     const TEST_FILE: &'static str = "red_filetest";
-    const FILE_CONTENT_LINE: &'static str = "testfile";
-    const COMMAND_CONTENT_LINE_1: &'static str = "testcmd";
-    const COMMAND_CONTENT_LINE_2: &'static str = "testcmda testcmdb";
+    const FILE_CONTENT_LINE: &'static str = "testfile line number";
+    const COMMAND_CONTENT_LINE: &'static str = "testcmd line number";
     const FILE_FILE_SUFFIX: &'static str = ".file";
     const COMMAND_FILE_SUFFIX: &'static str = ".cmd";
     //  ^^^     ^^^     Constants   ^^^     ^^^     //// }}}
@@ -746,12 +811,13 @@ mod tests {// {{{
     ///
     /// uses test_lines function to create file with which buffer
     /// is initialized
-    fn open_file_buffer_test( test_num: u8 ) -> Buffer {// {{{
-        let num_lines: usize = 5;   // number of lines to have in buffer
+    fn open_file_buffer_test_gen( test_num: u8, file_content_line: &str )
+            -> Buffer {// {{{
+        let num_lines: usize = 21;   // number of lines to have in buffer
         // generate test file of known content
-        let command = Command::new( "echo" )
+        let command = process::Command::new( "echo" )
                         .arg( "-e" )
-                        .arg( &test_lines( FILE_CONTENT_LINE, num_lines ) )
+                        .arg( &test_lines( file_content_line, num_lines ) )
                         .output()
                         .expect( "Failed to execute command" );
         let file_mode = FileMode{ f_write: true, f_create: true,
@@ -763,40 +829,48 @@ mod tests {// {{{
         file_opened.write( &command.stdout )
                 .expect( "Failed to write to file" );
         // create new buffer from this file
-        Buffer::new( BufferInput::File( test_file ) )
+        Buffer::new( BufferInput::File( test_file ),
+                &EditorState{ mode: EditorMode::Command, help: true } ).unwrap()
+    }// }}}
+// }}}
+    fn open_file_buffer_test( test_num: u8 ) -> Buffer {// {{{
+        open_file_buffer_test_gen( test_num, FILE_CONTENT_LINE )
     }// }}}
 // }}}
     /// Prep and return buffer for use in "command buffer" test functions// {{{
     ///
     /// uses test_lines function to create file with which buffer
     /// is initialized
-    pub fn open_command_buffer_test( test_num: u8, command_line_version: u8 )// {{{
+    pub fn open_command_buffer_test_gen( test_num: u8, cmd_content_line: &str )// {{{
             -> Buffer {
         //
-        let num_lines: usize = 7;   // number of lines to have in buffer
-        let command_content_line = match command_line_version {
-            1_u8 => COMMAND_CONTENT_LINE_1,
-            2_u8 => COMMAND_CONTENT_LINE_2,
-            _ => "",
-        };
+        let num_lines: usize = 21;   // number of lines to have in buffer
         let test_file: String = TEST_FILE.to_string() +
                 COMMAND_FILE_SUFFIX + test_num.to_string().as_str();
         let test_command = "echo -e ".to_string() +
-                                    &test_lines( command_content_line,
+                                    &test_lines( cmd_content_line,
                                     num_lines );
-        let mut buffer = Buffer::new( BufferInput::Command( test_command ));
+        let mut buffer = Buffer::new( BufferInput::Command( test_command ),
+                &EditorState{ mode: EditorMode::Command, help: true } ).unwrap();
         buffer.set_file_name( &test_file );
         buffer
     }// }}}
 // }}}
+    pub fn open_command_buffer_test( test_num: u8 )// {{{
+            -> Buffer {
+        open_command_buffer_test_gen( test_num, COMMAND_CONTENT_LINE )
+    }// }}}
+// }}}
     /// Prep and return buffer for use in "empty buffer" test functions// {{{
     fn open_empty_buffer_test() -> Buffer {// {{{
-        Buffer::new( BufferInput::None )
+        Buffer::new( BufferInput::None,
+                &EditorState{ mode: EditorMode::Command, help: true } ).unwrap()
     }// }}}
 // }}}
     /// deconstruct buffer from "file buffer" test// {{{
     /// any other necessary closing actions
     fn close_file_buffer_test( buffer: &mut Buffer ) {// {{{
+        buffer.set_modified( false );
         match fs::remove_file( buffer.get_file_name()
                                      .unwrap_or( "" ) )
                                      .map_err( |x| RedError::FileRemove(x) ) {
@@ -805,13 +879,16 @@ mod tests {// {{{
                 },
                 Ok(_) => {},
             }
-        buffer.destruct().unwrap();
+        buffer.destruct( EditorState{ mode: EditorMode::Command, help: true })
+            .unwrap();
     }// }}}
 // }}}
     /// deconstruct buffer from "command buffer" test;// {{{
     /// any other necessary closing actions
     pub fn close_command_buffer_test( buffer: &mut Buffer ) {// {{{
-        buffer.destruct().unwrap();
+        buffer.set_modified( false );
+        buffer.destruct( EditorState{ mode: EditorMode::Command, help: true })
+            .unwrap();
     }// }}}
 // }}}
     // end prep functions// }}}
@@ -905,7 +982,6 @@ mod tests {// {{{
         // set contstants
         let test_num: u8 = 4;
         let alt_file_name = "red_anothertest".to_string();
-        //
         let mut buffer = open_file_buffer_test( test_num );
         //
 
@@ -933,7 +1009,6 @@ mod tests {// {{{
         let test_num: u8 = 5;
         let test_line: usize = 2;
         let new_line_content: String = "This is the new line!".to_string();
-        //
         let mut buffer = open_file_buffer_test( test_num );
         let mut expectation: String;
         //
@@ -963,12 +1038,9 @@ mod tests {// {{{
         // set contstants
         let test_num: u8 = 1;
         let test_line: usize = 2;
-        let command_line_version: u8 = 1;
-        //
-        let mut buffer = open_command_buffer_test( test_num,
-                                                   command_line_version );
+        let mut buffer = open_command_buffer_test( test_num );
         let expectation =
-                COMMAND_CONTENT_LINE_1.to_string() +
+                COMMAND_CONTENT_LINE.to_string() +
                 test_line.to_string().as_str();
         //
 
@@ -987,16 +1059,13 @@ mod tests {// {{{
         // Common test start routine
         // set contstants
         let test_num: u8 = 2;
-        let command_line_version: u8 = 1;
-        //
-        let mut buffer = open_command_buffer_test( test_num,
-                                                   command_line_version );
+        let mut buffer = open_command_buffer_test( test_num );
         let mut expectation: String;
         //
 
         // Apply actual test(s)
         for test_line in 1 .. buffer.num_lines() {
-            expectation = COMMAND_CONTENT_LINE_1.to_string() +
+            expectation = COMMAND_CONTENT_LINE.to_string() +
                 test_line.to_string().as_str();
             assert_eq!( *buffer.get_line_content( test_line ).unwrap(),
                     expectation );
@@ -1012,10 +1081,7 @@ mod tests {// {{{
     fn command_buffer_test_3() {// {{{
         // set contstants
         let test_num: u8 = 3;
-        let command_line_version: u8 = 1;
-        //
-        let mut buffer = open_command_buffer_test( test_num,
-                                                   command_line_version );
+        let mut buffer = open_command_buffer_test( test_num );
         let mut expectation: String;
         //
 
@@ -1025,7 +1091,7 @@ mod tests {// {{{
             // NOTE: We don't iterate to num_lines+1 because the last line
             // is blank and won't match the expected value
             for test_line in 1 .. buffer.num_lines() {
-                expectation = COMMAND_CONTENT_LINE_1.to_string() +
+                expectation = COMMAND_CONTENT_LINE.to_string() +
                     test_line.to_string().as_str();
                 match lines_iter.next() {
                     Some( line ) => {
@@ -1049,12 +1115,9 @@ mod tests {// {{{
         // set contstants
         let test_num: u8 = 4;
         let test_line: usize = 2;
-        let command_line_version: u8 = 2;
-        //
-        let mut buffer = open_command_buffer_test( test_num,
-                                                   command_line_version );
+        let mut buffer = open_command_buffer_test( test_num );
         let expectation =
-                COMMAND_CONTENT_LINE_2.to_string() +
+                COMMAND_CONTENT_LINE.to_string() +
                 test_line.to_string().as_str();
         //
 
@@ -1073,16 +1136,13 @@ mod tests {// {{{
         // Common test start routine
         // set contstants
         let test_num: u8 = 5;
-        let command_line_version: u8 = 2;
-        //
-        let mut buffer = open_command_buffer_test( test_num,
-                                                   command_line_version );
+        let mut buffer = open_command_buffer_test( test_num );
         let mut expectation: String;
         //
 
         // Apply actual test(s)
         for test_line in 1 .. buffer.num_lines() {
-            expectation = COMMAND_CONTENT_LINE_2.to_string() +
+            expectation = COMMAND_CONTENT_LINE.to_string() +
                 test_line.to_string().as_str();
             assert_eq!( *buffer.get_line_content( test_line ).unwrap(),
                     expectation );
@@ -1098,10 +1158,7 @@ mod tests {// {{{
     fn command_buffer_test_6() {// {{{
         // set contstants
         let test_num: u8 = 6;
-        let command_line_version: u8 = 2;
-        //
-        let mut buffer = open_command_buffer_test( test_num,
-                                                   command_line_version );
+        let mut buffer = open_command_buffer_test( test_num );
         let mut expectation: String;
         //
 
@@ -1111,7 +1168,7 @@ mod tests {// {{{
             // NOTE: We don't iterate to num_lines+1 because the last line
             // is blank and won't match the expected value
             for test_line in 1 .. buffer.num_lines() {
-                expectation = COMMAND_CONTENT_LINE_2.to_string() +
+                expectation = COMMAND_CONTENT_LINE.to_string() +
                     test_line.to_string().as_str();
                 match lines_iter.next() {
                     Some( line ) => {
@@ -1126,6 +1183,147 @@ mod tests {// {{{
 
         // Common test close routine
         close_file_buffer_test( &mut buffer );
+    }// }}}
+    #[test]
+    fn substitute_test_1() {// {{{
+        let test_num: u8 = 1;
+        let mut buffer = open_file_buffer_test( test_num );
+        let num_lines = buffer.num_lines() - 1;
+        let state = EditorState{ mode: EditorMode::Command, help: true };
+        let expectation: String = "line testfile number".to_string();
+        let mut _expectation: String;
+        let regex_str: &str = r#"(testfile) (line)"#;
+        let to_sub: &str = r#"\2 \1"#;
+
+        // Apply actual test(s)
+        buffer.substitute( regex_str, to_sub, WhichMatch::Global, &state,
+                           1, num_lines );
+        let mut count = 0_usize;
+        for line in buffer.lines_iterator() {
+            count += 1;
+            if count > num_lines {
+                break;
+            }
+            _expectation = expectation.clone();
+            _expectation.push_str( &count.to_string() );
+            assert_eq!( _expectation, *line );
+        }
+    }// }}}
+    fn substitute_test_2() {// {{{
+        let test_num: u8 = 2;
+        let mut buffer = open_file_buffer_test_gen( test_num,
+                    "one two three four five -" );
+        let num_lines = buffer.num_lines() - 1;
+        let state = EditorState{ mode: EditorMode::Command, help: true };
+        let expectation: String = "five four three two one -".to_string();
+        let mut _expectation: String;
+        let regex_str: &str = r#"(one) (two) (three) (four) (five)"#;
+        let to_sub: &str = r#"\5 \4 \3 \2 \1"#;
+
+        // Apply actual test(s)
+        buffer.substitute( regex_str, to_sub, WhichMatch::Global, &state,
+                           1, num_lines );
+        let mut count = 0_usize;
+        for line in buffer.lines_iterator() {
+            count += 1;
+            if count > num_lines {
+                break;
+            }
+            _expectation = expectation.clone();
+            _expectation.push_str( &count.to_string() );
+            assert_eq!( _expectation, *line );
+        }
+    }// }}}
+    #[test]
+    fn substitute_test_3() {// {{{
+        let test_num: u8 = 3;
+        let mut buffer = open_file_buffer_test( test_num );
+        let num_lines = buffer.num_lines() - 1;
+        let state = EditorState{ mode: EditorMode::Command, help: true };
+        let mut _expectation: String;
+        let regex_str: &str = r#"e"#;
+        let to_sub: &str = r#"x"#;
+        let expectation: String = "txstfile line number".to_string();
+
+        // Apply actual test(s)
+        buffer.substitute( regex_str, to_sub, WhichMatch::Number(1), &state,
+                           1, num_lines );
+        let mut count = 0_usize;
+        for line in buffer.lines_iterator() {
+            count += 1;
+            if count > num_lines {
+                break;
+            }
+            _expectation = expectation.clone();
+            _expectation.push_str( &count.to_string() );
+            assert_eq!( _expectation, *line );
+        }
+    }// }}}
+    #[test]
+    fn substitute_test_4() {// {{{
+        let test_num: u8 = 4;
+        let mut buffer = open_file_buffer_test( test_num );
+        let num_lines = buffer.num_lines() - 1;
+        let state = EditorState{ mode: EditorMode::Command, help: true };
+        let mut _expectation: String;
+        let regex_str: &str = r#"e"#;
+        let to_sub: &str = r#"x"#;
+        let expectation: String = "testfile linx number".to_string();
+
+        // Apply actual test(s)
+        buffer.substitute( regex_str, to_sub, WhichMatch::Number(3), &state,
+                           1, num_lines );
+        let mut count = 0_usize;
+        for line in buffer.lines_iterator() {
+            count += 1;
+            if count > num_lines {
+                break;
+            }
+            _expectation = expectation.clone();
+            _expectation.push_str( &count.to_string() );
+            assert_eq!( _expectation, *line );
+        }
+    }// }}}
+    #[test]
+    fn substitute_test_5() {// {{{
+        let test_num: u8 = 5;
+        let mut buffer = open_file_buffer_test( test_num );
+        let num_lines = buffer.num_lines() - 1;
+        let state = EditorState{ mode: EditorMode::Command, help: true };
+        let mut _expectation: String;
+        let regex_str: &str = r#"e"#;
+        let to_sub: &str = r#"x"#;
+        let expectation: String = "txstfilx linx numbxr".to_string();
+
+        // Apply actual test(s)
+        buffer.substitute( regex_str, to_sub, WhichMatch::Global, &state,
+                           1, num_lines );
+        let mut count = 0_usize;
+        for line in buffer.lines_iterator() {
+            count += 1;
+            if count > num_lines {
+                break;
+            }
+            _expectation = expectation.clone();
+            _expectation.push_str( &count.to_string() );
+            assert_eq!( _expectation, *line );
+        }
+    }// }}}
+    #[test]
+    fn substitute_test_6() {// {{{
+        let test_num: u8 = 6;
+        let mut buffer = open_file_buffer_test( test_num );
+        let num_lines = buffer.num_lines() - 1;
+        let line_to_sub: usize = 8;
+        let state = EditorState{ mode: EditorMode::Command, help: true };
+        let regex_str: &str = r#"e"#;
+        let to_sub: &str = r#"x"#;
+        let mut expectation: String = "txstfilx linx numbxr8".to_string();
+
+        // Apply actual test(s)
+        buffer.substitute( regex_str, to_sub, WhichMatch::Global, &state,
+                           8, 8 );
+        assert_eq!( expectation, buffer.get_line_content(8).unwrap() );
     }// }}}
 // }}}
     /*
