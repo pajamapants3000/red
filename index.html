@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset='utf-8'>
+    <meta http-equiv="X-UA-Compatible" content="chrome=1">
+
+    <link rel="stylesheet" type="text/css" href="stylesheets/stylesheet.css" media="screen">
+    <link rel="stylesheet" type="text/css" href="stylesheets/github-dark.css" media="screen">
+    <link rel="stylesheet" type="text/css" href="stylesheets/print.css" media="print">
+
+    <title>Red by pajamapants3000</title>
+  </head>
+
+  <body>
+
+    <header>
+      <div class="container">
+        <h1>Red</h1>
+        <h2>ed implementation in rust</h2>
+
+        <section id="downloads">
+          <a href="https://github.com/pajamapants3000/red/zipball/master" class="btn">Download as .zip</a>
+          <a href="https://github.com/pajamapants3000/red/tarball/master" class="btn">Download as .tar.gz</a>
+          <a href="https://github.com/pajamapants3000/red" class="btn btn-github"><span class="icon"></span>View on GitHub</a>
+        </section>
+      </div>
+    </header>
+
+    <div class="container">
+      <section id="main_content">
+        <h1>
+<a id="red" class="anchor" href="#red" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>red</h1>
+
+<p>ed implementation in rust</p>
+
+<p>Following the manpage for the OpenBSD version of ed, my intention
+is to implement the same behavior and functionality present there.</p>
+
+<p>Once this goal has been reached, I may consider developing further. Or
+perhaps I will simply move on (maybe come back later). This particular
+project is less about need or use and more about practicing Rust.</p>
+
+<p>Much of the basic functionality is already present: can read a file or
+command output into the buffer, jump to any line using a very flexible
+line addressing scheme including regex search, and write files to disk.</p>
+
+<p>Some notable 'todo's that come to mind:</p>
+
+<ul>
+<li>incorporate markers in arithmetic addressing (e.g. <code>'x+4,'x+5p</code> )</li>
+<li>several commands and functions implemenenting them
+create/change/remove marker
+list lines
+delete line(s)
+substitution
+join lines
+move lines
+print with line numbers
+... several others</li>
+<li>complete invocation flags and parameters</li>
+</ul>
+      </section>
+    </div>
+
+    
+  </body>
+</html>
