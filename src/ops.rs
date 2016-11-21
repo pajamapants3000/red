@@ -11,7 +11,7 @@
 
 //! Operations callable by the user during program execution
 //!
-//! All operations take as arguments the current buffer, editor state, and
+//! All operations take as arguments the current state.buffer, editor state, and
 //! command (these may eventually be condensed into editor state) and return
 //! Result<(), RedError>
 //!
@@ -39,14 +39,14 @@ const COMMAND_PREFIX: &'static str = "@";
 
 // *** Data Structures *** {{{
 pub struct Operations {
-    operation_map: HashMap<char, Box<Fn( &mut Buffer, &mut EditorState,
-                                         Command ) -> Result<(), RedError>> >,
+    operation_map: HashMap<char, Box<Fn( &mut EditorState, Command )
+            -> Result<(), RedError>> >,
 }
 impl Operations {// {{{
     /// Creates Operations HashMap// {{{
     pub fn new() -> Operations {// {{{
-        let mut _operation_map: HashMap<char, Box<Fn( &mut Buffer,
-              &mut EditorState, Command ) -> Result<(), RedError>> > =
+        let mut _operation_map: HashMap<char,
+                Box<Fn( &mut EditorState, Command ) -> Result<(), RedError>> >=
             HashMap::with_capacity( NUM_OPERATIONS );
         _operation_map.insert( 'a', Box::new(append) );
         _operation_map.insert( 'c', Box::new(change) );
@@ -79,16 +79,16 @@ impl Operations {// {{{
     }// }}}
 // }}}
     /// Execute command// {{{
-    pub fn execute( &self, buffer: &mut Buffer, state: &mut EditorState,//{{{
-                    command: Command ) -> Result<(), RedError> {
+    pub fn execute( &self, state: &mut EditorState, command: Command )//{{{
+            -> Result<(), RedError> {
         match self.operation_map.contains_key( &command.operation ) {
             true => {
                 let op_to_execute = self.operation_map
                     .get( &command.operation ).unwrap();
-                op_to_execute( buffer, state, command )
+                op_to_execute( state, command )
             },
             false => {
-                Err( RedError::InvalidOperation{ operation: command.operation } )
+                Err(RedError::InvalidOperation{ operation: command.operation })
             },
         }
     }// }}}
@@ -105,7 +105,7 @@ fn mode_noop( mode: &mut EditorMode ) -> EditorMode {// {{{
     }
 }// }}}
 // }}}
-/// Avoid `unused` warnings for functions that don't modify buffer// {{{
+/// Avoid `unused` warnings for functions that don't modify state.buffer// {{{
 fn buffer_noop( buffer: &mut Buffer ) -> &mut Buffer {// {{{
     let temp = buffer.get_current_address();
     buffer.set_current_address( temp );
@@ -113,12 +113,12 @@ fn buffer_noop( buffer: &mut Buffer ) -> &mut Buffer {// {{{
 }// }}}
 // }}}
 /// A simple placeholder function for unimplemented features// {{{
-fn placeholder( buffer: &mut Buffer, state: &mut EditorState,//{{{
-                command: Command) -> Result<(), RedError> {
+fn placeholder( state: &mut EditorState, command: Command)//{{{
+        -> Result<(), RedError> {
     print_help( state, &format!(
             "Operation not yet implemented: {}", command.operation ));
     state.mode = mode_noop( &mut state.mode );
-    match buffer.get_file_name() {
+    match state.buffer.get_file_name() {
         Some( file_name ) => {
             print_help( state, &format!(
                     "Continuing work on {}", file_name ));
@@ -132,126 +132,124 @@ fn placeholder( buffer: &mut Buffer, state: &mut EditorState,//{{{
     }
 }// }}}
 // }}}
-fn append( buffer: &mut Buffer, state: &mut EditorState, command: Command )
+fn append( state: &mut EditorState, command: Command )
         -> Result<(), RedError> {// {{{
     assert_eq!( 'a', command.operation );
     let ( _initial, _final ) = default_addrs( command.address_initial,
                                               command.address_final,
-                                              buffer.get_current_address(),
-                                              buffer.get_current_address(),
+                                          state.buffer.get_current_address(),
+                                          state.buffer.get_current_address(),
                                             );
-    buffer.set_current_address( _final );
+    state.buffer.set_current_address( _final );
     state.mode = EditorMode::Insert;
     Ok( () )
 }//}}}
 /// Deletes address range and inserts text in its place// {{{
-fn change( buffer: &mut Buffer, state: &mut EditorState, command: Command )
+fn change( state: &mut EditorState, command: Command )
         -> Result<(), RedError> {// {{{
     assert_eq!( 'c', command.operation );
     let ( _initial, _final ) = default_addrs( command.address_initial,
                                               command.address_final,
-                                              buffer.get_current_address(),
-                                              buffer.get_current_address(),
+                                          state.buffer.get_current_address(),
+                                          state.buffer.get_current_address(),
                                             );
     let delete_command = Command{ address_initial: _initial,
             address_final: _final, operation: 'd', parameters: ""  };
     let insert_command = Command{ address_initial: _initial,
             address_final: _initial, operation: 'i', parameters: ""  };
-    try!( delete( buffer, state, delete_command ) );
-    insert( buffer, state, insert_command )
+    try!( delete( state, delete_command ) );
+    insert( state, insert_command )
 }//}}}
 // }}}
-fn delete( buffer: &mut Buffer, state: &mut EditorState, command: Command )
+fn delete( state: &mut EditorState, command: Command )
         -> Result<(), RedError> {// {{{
     assert_eq!( 'd', command.operation );
     let ( _initial, _final ) = default_addrs( command.address_initial,
                                               command.address_final,
-                                              buffer.get_current_address(),
-                                              buffer.get_current_address(),
+                                          state.buffer.get_current_address(),
+                                          state.buffer.get_current_address(),
                                             );
     for _ in _initial .. ( _final + 1 ) {
         // NOTE: lines move as you delete them - don't increment!
-        try!( buffer.delete_line( _initial ) );
+        try!( state.buffer.delete_line( _initial ) );
     }
-    buffer.set_current_address( _initial - 1 );
+    state.buffer.set_current_address( _initial - 1 );
     Ok( () )
 }//}}}
-fn edit( buffer: &mut Buffer, state: &mut EditorState, command: Command )
+fn edit( state: &mut EditorState, command: Command )
         -> Result<(), RedError> {// {{{
     assert_eq!( 'e', command.operation );
-    let _ = try!( buffer.on_close( state ));
-    edit_unsafe( buffer, state, Command{
-        address_initial: command.address_initial,
+    let _ = try!( state.buffer.on_close() );
+    edit_unsafe( state, Command{ address_initial: command.address_initial,
         address_final: command.address_final,
         operation: 'E', parameters: command.parameters })
 }//}}}
-fn edit_unsafe( buffer: &mut Buffer, state: &mut EditorState, command: Command )
+fn edit_unsafe( state: &mut EditorState, command: Command )
         -> Result<(), RedError> {// {{{
     assert_eq!( 'E', command.operation );
     let content = command.parameters;
     if &content[0..1] == COMMAND_PREFIX {  // process command
-        match Buffer::new( BufferInput::Command(content[1..].to_string() ),
-                state ) {
+        match Buffer::new( BufferInput::Command(content[1..].to_string() )) {
             Ok( _buffer ) => {
-                *buffer = _buffer;
+                state.buffer = _buffer;
             },
             Err(e) => {
                 return Err(e);
             },
         };
         print_help( &state, &format!( "Now editing output of command: {}",
-                                     buffer.get_file_name()
+                                     state.buffer.get_file_name()
                                      .unwrap_or( "<untitled>" ) ));
     } else {                    // process file
-        match Buffer::new(BufferInput::File( content.to_string() ), state ) {
+        match Buffer::new(BufferInput::File( content.to_string() )) {
             Ok( _buffer ) => {
-                *buffer = _buffer;
+                state.buffer = _buffer;
             },
             Err(e) => {
                 return Err(e);
             },
         };
         print_help( &state, &format!( "Now editing file: {}",
-                                     buffer.get_file_name()
+                                     state.buffer.get_file_name()
                                      .unwrap_or( "<untitled>" ) ));
     }
     Ok( () )
 }//}}}
-fn filename( buffer: &mut Buffer, state: &mut EditorState, command: Command )
+fn filename( state: &mut EditorState, command: Command )
         -> Result<(), RedError> {// {{{
     assert_eq!( 'f', command.operation );
     if command.parameters == "" {
-        match buffer.get_file_name() {
+        match state.buffer.get_file_name() {
             Some(f) => println!( "filename: {}", f ),
             None => println!( "no filename currently set" ),
         }
     } else {
-        try!( buffer.set_file_name( command.parameters ));
+        try!( state.buffer.set_file_name( command.parameters ));
     }
     Ok( () )
 }//}}}
-fn global( buffer: &mut Buffer, state: &mut EditorState, command: Command )
+fn global( state: &mut EditorState, command: Command )
         -> Result<(), RedError> {// {{{
     assert_eq!( 'g', command.operation );
     let ( _initial, _final ) = default_addrs( command.address_initial,
                                               command.address_final,
-                                              1, buffer.num_lines() );
-    placeholder( buffer, state, command )
+                                              1, state.buffer.num_lines() );
+    placeholder( state, command )
 }//}}}
-fn global_interactive( buffer: &mut Buffer, state: &mut EditorState,//{{{
+fn global_interactive( state: &mut EditorState,//{{{
                        command: Command ) -> Result<(), RedError> {
     assert_eq!( 'G', command.operation );
     let ( _initial, _final ) = default_addrs( command.address_initial,
                                               command.address_final,
-                                              1, buffer.num_lines() );
-    placeholder( buffer, state, command )
+                                              1, state.buffer.num_lines() );
+    placeholder( state, command )
 }//}}}
-fn help_recall( buffer: &mut Buffer, state: &mut EditorState, command: Command )
+fn help_recall( state: &mut EditorState, command: Command )
         -> Result<(), RedError> {// {{{
     assert_eq!( 'h', command.operation );
-    placeholder( buffer, state, command )
+    placeholder( state, command )
 }//}}}
-fn help_tgl( buffer: &mut Buffer, state: &mut EditorState, command: Command )
+fn help_tgl( state: &mut EditorState, command: Command )
         -> Result<(), RedError> {// {{{
     assert_eq!( 'H', command.operation );
     state.help = !state.help;
@@ -260,36 +258,36 @@ fn help_tgl( buffer: &mut Buffer, state: &mut EditorState, command: Command )
         false => "off", });
     Ok( () )
 }//}}}
-fn insert( buffer: &mut Buffer, state: &mut EditorState, command: Command )
+fn insert( state: &mut EditorState, command: Command )
         -> Result<(), RedError> {// {{{
     assert_eq!( 'i', command.operation );
     let ( _initial, _final ) = default_addrs( command.address_initial,
                                               command.address_final,
-                                              buffer.get_current_address(),
-                                              buffer.get_current_address(),
+                                          state.buffer.get_current_address(),
+                                          state.buffer.get_current_address(),
                                             );
-    buffer.set_current_address( _final - 1 );
+    state.buffer.set_current_address( _final - 1 );
     state.mode = EditorMode::Insert;
     Ok( () )
 }//}}}
-fn join( buffer: &mut Buffer, state: &mut EditorState, command: Command )
+fn join( state: &mut EditorState, command: Command )
         -> Result<(), RedError> {// {{{
     assert_eq!( 'j', command.operation );
     let ( _initial, _final ) = default_addrs( command.address_initial,
                                               command.address_final,
-                                              buffer.get_current_address(),
-                                          buffer.get_current_address() + 1,
+                                      state.buffer.get_current_address(),
+                                      state.buffer.get_current_address() + 1,
                                             );
-    try!( buffer.join_lines( _initial, _final ));
+    try!( state.buffer.join_lines( _initial, _final ));
     Ok( () )
 }//}}}
-fn mark( buffer: &mut Buffer, state: &mut EditorState, command: Command )
+fn mark( state: &mut EditorState, command: Command )
         -> Result<(), RedError> {// {{{
     assert_eq!( 'k', command.operation );
     let ( _initial, _final ) = default_addrs( command.address_initial,
                                               command.address_final,
-                                              buffer.get_current_address(),
-                                              buffer.get_current_address(),
+                                          state.buffer.get_current_address(),
+                                          state.buffer.get_current_address(),
                                             );
     // make sure we have been provided a single character for the mark
     let param_len = command.parameters.len();
@@ -302,7 +300,7 @@ fn mark( buffer: &mut Buffer, state: &mut EditorState, command: Command )
         Some(x) => {
             if !( 'a' <= x && x <= 'z' ) {
                 print_help( state,
-                        "mark must be a lowercase latin character ('a'..'z')" );
+                    "mark must be a lowercase latin character ('a'..'z')" );
                 return Err( RedError::ParameterSyntax{
                         parameter: command.parameters.to_string() });
             } else {
@@ -316,18 +314,18 @@ fn mark( buffer: &mut Buffer, state: &mut EditorState, command: Command )
         },
     };
     // if given a section of lines, mark the beginning
-    buffer.set_marker( _final, mark_char );
+    state.buffer.set_marker( _final, mark_char );
     Ok( () )
 
 }//}}}
 // XXX: write built-in implementation in Buffer?
-fn lines_list( buffer: &mut Buffer, state: &mut EditorState, command: Command )
+fn lines_list( state: &mut EditorState, command: Command )
         -> Result<(), RedError> {// {{{
     assert_eq!( 'l', command.operation );
     let ( _initial, _final ) = default_addrs( command.address_initial,
                                               command.address_final,
-                                              buffer.get_current_address(),
-                                              buffer.get_current_address(),
+                                          state.buffer.get_current_address(),
+                                          state.buffer.get_current_address(),
                                             );
     let stdout = stdout();
     let handle = stdout.lock();
@@ -346,13 +344,14 @@ fn lines_list( buffer: &mut Buffer, state: &mut EditorState, command: Command )
         term_height = 0;
     }
     for address in _initial .. _final + 1 {
-        let line = buffer.get_line_content( address ).unwrap_or("");
+        let line = state.buffer.get_line_content( address ).unwrap_or("");
         try!( writer.write( line_prefix.as_bytes() )
               .map_err(|_| RedError::Stdout));
         ch_written += line_prefix.len();
         for ch in line.chars() {
             for _ch in ch.escape_default() {
-                try!( writer.write( &[_ch as u8] ).map_err(|_| RedError::Stdout));
+                try!( writer.write( &[_ch as u8] )
+                          .map_err(|_| RedError::Stdout));
                 ch_written += 1;
                 if line_prefix.len() == 0 && ch_written ==
                     ( term_width - line_prefix.len() ) * ( term_height - 1 ) {
@@ -381,74 +380,74 @@ fn prompt_for_more( stdout_writer: &mut BufWriter<StdoutLock> ) {// {{{
         .expect( "prompt_for_more: error writing to stdout" );
 }// }}}
 // }}}
-fn move_lines( buffer: &mut Buffer, state: &mut EditorState, command: Command )
+fn move_lines( state: &mut EditorState, command: Command )
         -> Result<(), RedError> {// {{{
     assert_eq!( 'm', command.operation );
     let mut destination: usize;
     let ( _initial, _final ) = default_addrs( command.address_initial,
                                               command.address_final,
-                                              buffer.get_current_address(),
-                                              buffer.get_current_address(),
+                                          state.buffer.get_current_address(),
+                                          state.buffer.get_current_address(),
                                             );
     if command.parameters == "0" {
         destination = 0;
     } else {
-    destination = try!(parse_address_field( command.parameters, buffer ))
-            .unwrap_or(buffer.get_current_address() );
+    destination = try!(parse_address_field(command.parameters, &state.buffer))
+            .unwrap_or(state.buffer.get_current_address() );
     }
-    try!( buffer.move_lines( &_initial, &_final, &destination ));
+    try!( state.buffer.move_lines( &_initial, &_final, &destination ));
     if (_initial-1) <= destination && destination <= _final {
         destination = _initial - 1;
     }
-    buffer.set_current_address( destination + 1 + ( _final - _initial ) );
+    state.buffer.set_current_address( destination + 1 + ( _final - _initial ));
     Ok( () )
 }//}}}
 // XXX: write built-in implementation in Buffer?
-fn print_numbered( buffer: &mut Buffer, state: &mut EditorState,//{{{
+fn print_numbered( state: &mut EditorState,//{{{
                    command: Command ) -> Result<(), RedError> {
     assert_eq!( 'n', command.operation );
     let ( _initial, _final ) = default_addrs( command.address_initial,
                                               command.address_final,
-                                              buffer.get_current_address(),
-                                              buffer.get_current_address()
+                                          state.buffer.get_current_address(),
+                                          state.buffer.get_current_address(),
                                                 );
-    let num_lines_f: f64 = buffer.num_lines() as f64 + 1.0_f64;
+    let num_lines_f: f64 = state.buffer.num_lines() as f64 + 1.0_f64;
     let _width = num_lines_f.log10().ceil() as usize;
-    for ( _num, _line ) in buffer.lines_iterator().enumerate()
+    for ( _num, _line ) in state.buffer.lines_iterator().enumerate()
         .skip( _initial - 1 )
         .take(( _final + 1 ) - _initial )
         .map( |(x, y)| ( x+1, y )) {
         print!( "{:width$}|", _num, width = _width );
         println!("{}", _line );
     }
-    buffer.set_current_address( _final );
+    state.buffer.set_current_address( _final );
     Ok( () )
 }//}}}
-/// Display range of lines of buffer in terminal // {{{
+/// Display range of lines of state.buffer in terminal // {{{
 ///
 /// Caller will choose the start and finish addresses to fit
-/// the range of the buffer; For example, if the user tries
-/// to print beyond the end of the buffer, address_final will
-/// be the address of the last line of the buffer (in other
+/// the range of the state.buffer; For example, if the user tries
+/// to print beyond the end of the state.buffer, address_final will
+/// be the address of the last line of the state.buffer (in other
 /// words, the lines number of the last line)
 ///
 /// # Panics
 /// if println! panics, which happens if it fails to write
 /// to io::stdout()
 ///
-fn print( buffer: &mut Buffer, state: &mut EditorState, command: Command )//{{{
+fn print( state: &mut EditorState, command: Command )//{{{
             -> Result<(), RedError> {
     assert_eq!( 'p', command.operation );
     let ( _initial, _final ) = default_addrs( command.address_initial,
                                               command.address_final,
-                                              buffer.get_current_address(),
-                                              buffer.get_current_address()
+                                          state.buffer.get_current_address(),
+                                          state.buffer.get_current_address(),
                                                 );
     for indx in _initial .. ( _final + 1 ) {
-        println!("{}", buffer.get_line_content( indx ).expect(
+        println!("{}", state.buffer.get_line_content( indx ).expect(
                 "ops::print: called get_line_content on out-of-range line" ) );
     }
-    buffer.set_current_address( _final );
+    state.buffer.set_current_address( _final );
     // TODO: Drop this? Or Keep to avoid unused warnings?
     state.mode = EditorMode::Command;
     Ok( () )
@@ -456,100 +455,100 @@ fn print( buffer: &mut Buffer, state: &mut EditorState, command: Command )//{{{
 // }}}
 /// Exit program// {{{
 ///
-/// Make sure all buffers have been saved
+/// Make sure all state.buffers have been saved
 ///
 /// Delete all temprary storage
-fn quit( buffer: &mut Buffer, state: &mut EditorState, command: Command )//{{{
+fn quit( state: &mut EditorState, command: Command )//{{{
             -> Result<(), RedError> {
     assert_eq!( 'q', command.operation );
-    match buffer.on_close( state ) {
+    match state.buffer.on_close() {
         Ok( _ ) => exit( error_code( RedError::Quit ) as i32),
         Err( _ ) => exit( error_code( RedError::NoDestruct ) as i32),
     }
 }// }}}
 //}}}
-fn read( buffer: &mut Buffer, state: &mut EditorState, command: Command )
+fn read( state: &mut EditorState, command: Command )
         -> Result<(), RedError> {// {{{
     assert_eq!( 'r', command.operation );
     let ( _initial, _final ) = default_addrs( command.address_initial,
                                               command.address_final,
-                                              1, buffer.num_lines() );
-    placeholder( buffer, state, command )
+                                              1, state.buffer.num_lines() );
+    placeholder( state, command )
 }//}}}
-fn substitute( buffer: &mut Buffer, state: &mut EditorState, command: Command )
+fn substitute( state: &mut EditorState, command: Command )
         -> Result<(), RedError> {// {{{
     assert_eq!( 's', command.operation );
     let ( _initial, _final ) = default_addrs( command.address_initial,
                                               command.address_final,
-                                              buffer.get_current_address(),
-                                              buffer.get_current_address(),
+                                          state.buffer.get_current_address(),
+                                          state.buffer.get_current_address(),
                                             );
     let sub_parms: Substitution = try!( parse_substitution_parameter(
             command.parameters ));
-    buffer.substitute( &sub_parms.to_match, &sub_parms.to_sub, sub_parms.which,
-                       state, _initial, _final );
+    state.buffer.substitute( &sub_parms.to_match, &sub_parms.to_sub,
+                             sub_parms.which, _initial, _final );
     Ok( () )
 }//}}}
-fn transfer( buffer: &mut Buffer, state: &mut EditorState, command: Command )
+fn transfer( state: &mut EditorState, command: Command )
         -> Result<(), RedError> {// {{{
     assert_eq!( 't', command.operation );
     let destination: usize;
     let ( _initial, _final ) = default_addrs( command.address_initial,
                                               command.address_final,
-                                              buffer.get_current_address(),
-                                              buffer.get_current_address(),
+                                          state.buffer.get_current_address(),
+                                          state.buffer.get_current_address(),
                                             );
     if command.parameters == "0" {
         destination = 0;
     } else {
-    destination = try!(parse_address_field( command.parameters, buffer ))
-            .unwrap_or(buffer.get_current_address() );
+    destination = try!(parse_address_field(command.parameters, &state.buffer))
+            .unwrap_or(state.buffer.get_current_address() );
     }
-    try!( buffer.copy_lines( _initial, _final, destination ));
+    try!( state.buffer.copy_lines( _initial, _final, destination ));
     Ok( () )
 }//}}}
-fn undo( buffer: &mut Buffer, state: &mut EditorState, command: Command )
+fn undo( state: &mut EditorState, command: Command )
         -> Result<(), RedError> {// {{{
     assert_eq!( 'u', command.operation );
-    placeholder( buffer, state, command )
+    placeholder( state, command )
 }//}}}
-fn global_reverse( buffer: &mut Buffer, state: &mut EditorState,//{{{
+fn global_reverse( state: &mut EditorState,//{{{
                    command: Command ) -> Result<(), RedError> {
     assert_eq!( 'v', command.operation );
     let ( _initial, _final ) = default_addrs( command.address_initial,
                                               command.address_final,
-                                              1, buffer.num_lines() );
-    placeholder( buffer, state, command )
+                                              1, state.buffer.num_lines() );
+    placeholder( state, command )
 }//}}}
-fn global_reverse_interactive( buffer: &mut Buffer, state: &mut EditorState,//{{{
+fn global_reverse_interactive( state: &mut EditorState,//{{{
                                command: Command ) -> Result<(), RedError> {
     assert_eq!( 'V', command.operation );
     let ( _initial, _final ) = default_addrs( command.address_initial,
                                               command.address_final,
-                                              1, buffer.num_lines() );
-    placeholder( buffer, state, command )
+                                              1, state.buffer.num_lines() );
+    placeholder( state, command )
 }//}}}
-/// Write buffer to file// {{{
-fn write_to_disk( buffer: &mut Buffer, state: &mut EditorState,//{{{
+/// Write state.buffer to file// {{{
+fn write_to_disk( state: &mut EditorState,//{{{
                   command: Command ) -> Result<(), RedError> {
     assert_eq!( 'w', command.operation );
     // TODO: Drop this? Or Keep to avoid unused warnings?
     state.mode = EditorMode::Command;
     let ( _initial, _final ) = default_addrs( command.address_initial,
                                               command.address_final,
-                                              1, buffer.num_lines() );
-    buffer.write_to_disk( command.parameters, false, _initial, _final )
+                                              1, state.buffer.num_lines() );
+    state.buffer.write_to_disk( command.parameters, false, _initial, _final )
 }// }}}
 // }}}
-fn append_to_disk( buffer: &mut Buffer, state: &mut EditorState,//{{{
+fn append_to_disk( state: &mut EditorState,//{{{
                    command: Command ) -> Result<(), RedError> {
     assert_eq!( 'W', command.operation );
     // TODO: Drop this? Or Keep to avoid unused warnings?
     state.mode = EditorMode::Command;
     let ( _initial, _final ) = default_addrs( command.address_initial,
                                               command.address_final,
-                                              1, buffer.num_lines() );
-    buffer.write_to_disk( command.parameters, true, _initial, _final )
+                                              1, state.buffer.num_lines() );
+    state.buffer.write_to_disk( command.parameters, true, _initial, _final )
 }//}}}
 
 /// Return pair of lines, either original or the specified defaults

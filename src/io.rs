@@ -25,7 +25,6 @@ use ::{EditorState, EditorMode};
 // ^^^ Attributes ^^^ }}}
 //
 // *** Constants *** {{{
-const PROMPT_COMMAND: &'static str = "%";
 const PROMPT_CONTINUE: &'static str = ">";
 const PROMPT_INSERT: &'static str = "!";
 //const LINE_CONT: &'static str = "\\\n";
@@ -82,11 +81,11 @@ pub fn file_opener( name: &str, mode: FileMode ) -> Result<File, RedError> {// {
 /// is not backslash-escaped (not a continuation)
 /// In Insert and Replace modes, collects lines until a line with a single
 /// dot (or period) is detected.
-/// In View mode, collects single characters for controlling view output
+/// In View mode (NYI), collects single characters for controlling view output
 ///     e.g. j,k for scrolling down, up
 ///
 pub fn get_input( mut input_buffer: String, state: &EditorState )
-            -> String {// {{{
+            -> Result<String, RedError> {// {{{
     let stdin = io::stdin();
     let stdout = io::stdout();
     let mut stdin_handle = stdin.lock();
@@ -94,7 +93,7 @@ pub fn get_input( mut input_buffer: String, state: &EditorState )
     let mut prompt: &str;
 
     match state.mode {
-        EditorMode::Command => prompt = PROMPT_COMMAND,
+        EditorMode::Command => prompt = &state.prompt,
         EditorMode::Insert  => prompt = PROMPT_INSERT,
     }
 
@@ -104,28 +103,32 @@ pub fn get_input( mut input_buffer: String, state: &EditorState )
     }
 
     loop {
-        // pop continuation backslash; assert that's what we get;
         match input_buffer.pop() {
             Some(x) => {
                 assert_eq!( x, '\\' );
-            }
+            },
             None => {},
         }
-        stdout_handle.write( prompt.as_bytes() ).unwrap();
-        stdout_handle.flush().unwrap();
-        stdin_handle.read_line( &mut input_buffer ).unwrap();
+
+        try!( stdout_handle.write( prompt.as_bytes() )
+              .map_err( |_| RedError::Stdout ));
+        try!( stdout_handle.flush().map_err( |_| RedError::Stdout ));
+        try!( stdin_handle.read_line( &mut input_buffer.to_string() )
+              .map_err( |_| RedError::Stdin ));
 
         match input_buffer.pop() {
-            Some(x) => assert_eq!( x, '\n' ),
+            Some(x) => {
+                assert_eq!( x, '\n' );
+            },
             None => {},
         }
-        if !RE.is_match( &mut input_buffer ) {
+
+        if !RE.is_match( &input_buffer ) {
             break;
         }
         prompt = PROMPT_CONTINUE;
     }
-
-    input_buffer
+    Ok( input_buffer )
 }// }}}
 // }}}
 /// The public interface - turn command input into output string

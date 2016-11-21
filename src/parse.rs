@@ -17,7 +17,7 @@ use ::regex::{Regex, Captures};
 use error::*;
 use io::*;
 use buf::*;
-use ::{EditorState, EditorMode, print_help};
+use ::{EditorState, EditorMode};
 
 // ^^^ Bring in to namespace ^^^ }}}
 
@@ -56,8 +56,7 @@ pub enum WhichMatch {
 ///
 /// This is the public interface to the parse module
 ///
-pub fn parse_command<'a>( _cmd_input: &'a str, buffer: &Buffer,// {{{
-                          state: &EditorState )
+pub fn parse_command<'a>( _cmd_input: &'a str, state: &EditorState )//{{{
         -> Result<Command<'a>, RedError> {
     // MUST initialize?
     let mut _address_initial: usize = 1;
@@ -86,7 +85,7 @@ pub fn parse_command<'a>( _cmd_input: &'a str, buffer: &Buffer,// {{{
                 },
             }
             let ( _address_initial, _address_final ) = try!(
-                    get_address_range( addrs, buffer ) );
+                    get_address_range( addrs, &state.buffer ) );
 
             Ok( Command {
                     address_initial: _address_initial,
@@ -545,8 +544,8 @@ mod tests {
         let test_command = "echo -e ".to_string() +
                                     &test_lines( command_content_line,
                                     num_lines );
-        let mut buffer = Buffer::new( BufferInput::Command( test_command ),
-                &EditorState{ mode: EditorMode::Command, help: true } ).unwrap();
+        let mut buffer = Buffer::new( BufferInput::Command( test_command ))
+                .unwrap();
         buffer.set_file_name( &test_file );
         buffer.set_current_address( 1 );
         buffer

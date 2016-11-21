@@ -40,15 +40,17 @@ use ops::Operations;
 // *** Constants *** {{{
 const DEFAULT_MODE: EditorMode = EditorMode::Command;
 const DEFAULT_HELP: bool = true;
+const DEFAULT_PROMPT: &'static str = "%";
 // ^^^ Constants ^^^ }}}
 // *** Data Structures *** {{{
-#[derive(Clone)]
 /// Contain state values for the program during execution
 ///
 /// TODO: include buffer and command structures?
 pub struct EditorState {
     mode: EditorMode,
     help: bool,
+    prompt: String,
+    buffer: Buffer,
 }
 #[derive(Clone)]
 pub enum EditorMode {
@@ -59,12 +61,13 @@ pub enum EditorMode {
 
 // *** Functions *** {{{
 fn main() {// {{{
-    // initialize editor state
-    let mut state = EditorState { mode: DEFAULT_MODE, help: DEFAULT_HELP };
     // initialize buffer
-    let mut buffer = Buffer::new( BufferInput::None, &state )
+    let mut buffer = Buffer::new( BufferInput::None )
         .expect( "Failed to create initial empty buffer" );
     buffer.set_file_name( "untitled" ).expect("main: failed to set file name");
+    // initialize editor state
+    let mut state = EditorState { mode: DEFAULT_MODE, help: DEFAULT_HELP,
+            prompt: DEFAULT_PROMPT.to_string(), buffer: buffer };
     // Construct operations hashmap
     let operations = Operations::new();
     // Collect invocation arguments
@@ -74,28 +77,19 @@ fn main() {// {{{
         // generate and execute edit operation for requested file
         let command = Command{ address_initial: 0, address_final: 0,
                 operation: 'e', parameters: &args[1] };
-        let _ = operations.execute( &mut buffer, &mut state, command );
+        let _ = operations.execute( &mut state, command );
     }
-    /* Print buffer content for testing
-    {
-        let lines = buffer.lines_iterator();
-        for line in lines {
-            println!( "{:?}", line );
-        }
-    }
-    */
-
     let mut input: String = String::new();
     loop {                          // loop until user calls quit operation
         input.clear();
-        input = get_input( input, &state );
+        input = get_input( input, &state ).expect("main: error getting input");
         match state.mode {
             EditorMode::Command => {
                 if input == "" {
-                    continue;
+                    continue;   // set default command, e.g. print cur addr?
                 }
                 let command: Command;
-                match parse_command( &input, &buffer, &state ) {
+                match parse_command( &input, &state ) {
                     Ok(x) => {
                         command = x;
                     }
@@ -105,7 +99,7 @@ fn main() {// {{{
                     },
                 }
                 let opchar = command.operation;
-                match operations.execute( &mut buffer, &mut state, command ) {
+                match operations.execute( &mut state, command ) {
                     Ok( () ) => {},
                     Err(_) => {
                         print_help( &state,
@@ -117,7 +111,7 @@ fn main() {// {{{
                 if input == ".".to_string() {
                     state.mode = EditorMode::Command;
                 } else {
-                    buffer.append_here( &input );
+                    state.buffer.append_here( &input );
                     state.mode = EditorMode::Insert;
                 }
             },
