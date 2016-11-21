@@ -17,7 +17,7 @@ use std::io::{self, BufRead, Write};
 use regex::Regex;
 
 use error::*;
-use ::{EditorState, EditorMode, print_help};
+use ::{EditorState, EditorMode};
 
 // ^^^ Bring in to namespace ^^^ }}}
 //

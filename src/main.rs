@@ -117,7 +117,7 @@ fn main() {// {{{
                 if input == ".".to_string() {
                     state.mode = EditorMode::Command;
                 } else {
-                    buffer.insert_here( &input );
+                    buffer.append_here( &input );
                     state.mode = EditorMode::Insert;
                 }
             },

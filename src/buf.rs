@@ -12,7 +12,7 @@
 // Use LineWriter instead of, or in addition to, BufWriter?
 use std::io::prelude::*;
 use std::io::{BufReader, BufWriter, stdout};
-use std::fs::{self, File, copy, rename};
+use std::fs::{self, File, rename};
 use std::path::{Path, PathBuf};
 use std::collections::LinkedList;
 use std::collections::linked_list::{self, Iter, IterMut};
@@ -307,21 +307,21 @@ impl Buffer {   //{{{
     /// Delete line// {{{
     ///
     /// TODO: Add error handling, Result<> return?
-    pub fn delete_line( &mut self, line_num: usize )
+    pub fn delete_line( &mut self, address: usize )
             -> Result<(), RedError> {// {{{
-        if line_num > self.lines.len() {
-            return Err( RedError::GetLineOutOfBounds{ line_num: line_num } );
+        if address > self.lines.len() {
+            return Err( RedError::GetLineOutOfBounds{ address: address } );
         }
-        let mut back = self.lines.split_off( line_num );
+        let mut back = self.lines.split_off( address );
         match self.lines.pop_back() {
             Some(_) => {},
             None => {
                 return Err(
-                    RedError::GetLineOutOfBounds{ line_num: line_num } );
+                    RedError::GetLineOutOfBounds{ address: address } );
             },
         }
         self.lines.append( &mut back );
-        self.delete_update_markers( line_num );
+        self.delete_update_markers( address );
         self.total_lines -= 1; // previous tests preclude underflow here?
         self._is_modified = true;
         Ok( () )
@@ -330,15 +330,15 @@ impl Buffer {   //{{{
     /// Insert new line at current position// {{{
     ///
     /// TODO: Add error handling, Result<> return?
-    pub fn insert_here( &mut self, new_line: &str ) {// {{{
-        let line_num = self.current_line;
-        self.insert_line( line_num, new_line );
+    pub fn append_here( &mut self, new_line: &str ) {// {{{
+        let address = self.current_line;
+        self.append_line( address, new_line );
     }// }}}
 // }}}
     /// Insert new line// {{{
     ///
     /// TODO: Add error handling, Result<> return?
-    pub fn insert_line( &mut self, address: usize, new_line: &str ) {// {{{
+    pub fn append_line( &mut self, address: usize, new_line: &str ) {// {{{
         let mut back = self.lines.split_off( address );
         self.lines.push_back( new_line.to_string() );
         self.lines.append( &mut back );
@@ -350,13 +350,13 @@ impl Buffer {   //{{{
 // }}}
     /// Replace line with new string// {{{
     ///
-    /// TODO: Add error handling; panics if line_num > len
-    pub fn set_line_content( &mut self, line_num: usize, new_line: &str )// {{{
+    /// TODO: Add error handling; panics if address > len
+    pub fn set_line_content( &mut self, address: usize, new_line: &str )// {{{
             -> Result<(), RedError> {
-        if line_num > self.lines.len() {
-            return Err( RedError::SetLineOutOfBounds{ line_num: line_num } );
+        if address > self.lines.len() {
+            return Err( RedError::SetLineOutOfBounds{ address: address } );
         }
-        let mut back_list = self.lines.split_off( line_num - 1 );
+        let mut back_list = self.lines.split_off( address - 1 );
         let _ = back_list.pop_front();
         self.lines.push_back( new_line.to_string() );
         self.lines.append( &mut back_list );
@@ -365,14 +365,14 @@ impl Buffer {   //{{{
     }// }}}
 // }}}
     /// Return current working line number// {{{
-    pub fn get_current_line_number( &self ) -> usize {// {{{
+    pub fn get_current_address( &self ) -> usize {// {{{
         self.current_line
     }// }}}
 // }}}
     /// Move "cursor" to new line// {{{
-    pub fn set_current_line_number( &mut self, line_number: usize ) {// {{{
-        if line_number < self.total_lines {
-            self.current_line = line_number;
+    pub fn set_current_address( &mut self, address: usize ) {// {{{
+        if address < self.total_lines {
+            self.current_line = address;
         } else {
             self.current_line = self.total_lines;
         }
@@ -617,9 +617,9 @@ impl Buffer {   //{{{
     /// Keep markers valid after inserting new line
     ///
     /// I can't think of any errors that might go here
-    fn insert_update_markers( &mut self, line_num: usize ) {
+    fn insert_update_markers( &mut self, address: usize ) {
         for marker in &mut self.markers {
-            if *marker > line_num {
+            if *marker > address {
                 *marker += 1;
             }
         }
@@ -628,11 +628,11 @@ impl Buffer {   //{{{
     /// delete any markers to deleted line
     ///
     /// I can't think of any errors that might go here
-    fn delete_update_markers( &mut self, line_num: usize ) {
+    fn delete_update_markers( &mut self, address: usize ) {
         for marker in &mut self.markers {
-            if *marker > line_num {
+            if *marker > address {
                 *marker -= 1;
-            } else if *marker == line_num {
+            } else if *marker == address {
                 *marker = 0;
             }
         }
@@ -648,11 +648,6 @@ impl Buffer {   //{{{
         }
     }// }}}
 // }}}
-    pub fn substitute_line( &mut self, address: usize, to_match: &str,// {{{
-                    to_sub: &str, which: WhichMatch, state: &EditorState ) {
-        let re: Regex = Regex::new( to_match ).unwrap();
-        self._substitute_line( address, &re, to_sub, &which, state );
-    }
     fn _substitute_line( &mut self, address: usize, re_to_match: &Regex,// {{{
                      to_sub: &str, which: &WhichMatch, state: &EditorState ) {
         let mut new_line: String = String::new();
@@ -717,10 +712,10 @@ impl Buffer {   //{{{
             }
         }
         if address_initial == 0 {
-            self.insert_line( 0, &new_line );
+            self.append_line( 0, &new_line );
             self.current_line = 1;
         } else {
-            self.insert_line( address_initial - 1, &new_line );
+            self.append_line( address_initial - 1, &new_line );
             self.current_line = address_initial;
         }
         try!( self.store_buffer() );
@@ -738,15 +733,15 @@ impl Buffer {   //{{{
         }
         let mut offset: usize = 0;
         let mut line: String;
-        for line_num in _initial .. _final + 1 {
-            line = self.get_line_content( line_num - offset )
+        for address in _initial .. _final + 1 {
+            line = self.get_line_content( address - offset )
                 .unwrap_or("").to_string();
-            try!( self.delete_line( line_num - offset ));
-            if ( line_num - offset ) > _destination {
-                self.insert_line( _destination, &line );
+            try!( self.delete_line( address - offset ));
+            if ( address - offset ) > _destination {
+                self.append_line( _destination, &line );
             } else {
                 offset += 1;
-                self.insert_line( _destination - offset, &line );
+                self.append_line( _destination - offset, &line );
             }
             _destination += 1;
         }
@@ -764,7 +759,7 @@ impl Buffer {   //{{{
                 line = self.get_line_content( address )
                         .unwrap_or("").to_string();
             }
-            self.insert_line( destination + address - address_initial, &line );
+            self.append_line( destination + address - address_initial, &line );
         }
         self.current_line = destination + 1 + address_final - address_initial;
         Ok( () )

@@ -23,8 +23,6 @@ use std::collections::hash_map::HashMap;
 use std::process::exit;
 use std::io::{Write, BufRead, BufWriter, stdout, StdoutLock, stdin};
 
-use regex::{Regex, Captures};
-
 use buf::*;
 use error::*;
 use parse::*;
@@ -109,8 +107,8 @@ fn mode_noop( mode: &mut EditorMode ) -> EditorMode {// {{{
 // }}}
 /// Avoid `unused` warnings for functions that don't modify buffer// {{{
 fn buffer_noop( buffer: &mut Buffer ) -> &mut Buffer {// {{{
-    let temp = buffer.get_current_line_number();
-    buffer.set_current_line_number( temp );
+    let temp = buffer.get_current_address();
+    buffer.set_current_address( temp );
     buffer
 }// }}}
 // }}}
@@ -139,10 +137,10 @@ fn append( buffer: &mut Buffer, state: &mut EditorState, command: Command )
     assert_eq!( 'a', command.operation );
     let ( _initial, _final ) = default_addrs( command.address_initial,
                                               command.address_final,
-                                              buffer.get_current_line_number(),
-                                              buffer.get_current_line_number(),
+                                              buffer.get_current_address(),
+                                              buffer.get_current_address(),
                                             );
-    buffer.set_current_line_number( _final );
+    buffer.set_current_address( _final );
     state.mode = EditorMode::Insert;
     Ok( () )
 }//}}}
@@ -152,8 +150,8 @@ fn change( buffer: &mut Buffer, state: &mut EditorState, command: Command )
     assert_eq!( 'c', command.operation );
     let ( _initial, _final ) = default_addrs( command.address_initial,
                                               command.address_final,
-                                              buffer.get_current_line_number(),
-                                              buffer.get_current_line_number(),
+                                              buffer.get_current_address(),
+                                              buffer.get_current_address(),
                                             );
     let delete_command = Command{ address_initial: _initial,
             address_final: _final, operation: 'd', parameters: ""  };
@@ -168,14 +166,14 @@ fn delete( buffer: &mut Buffer, state: &mut EditorState, command: Command )
     assert_eq!( 'd', command.operation );
     let ( _initial, _final ) = default_addrs( command.address_initial,
                                               command.address_final,
-                                              buffer.get_current_line_number(),
-                                              buffer.get_current_line_number(),
+                                              buffer.get_current_address(),
+                                              buffer.get_current_address(),
                                             );
     for _ in _initial .. ( _final + 1 ) {
         // NOTE: lines move as you delete them - don't increment!
         try!( buffer.delete_line( _initial ) );
     }
-    buffer.set_current_line_number( _initial - 1 );
+    buffer.set_current_address( _initial - 1 );
     Ok( () )
 }//}}}
 fn edit( buffer: &mut Buffer, state: &mut EditorState, command: Command )
@@ -267,10 +265,10 @@ fn insert( buffer: &mut Buffer, state: &mut EditorState, command: Command )
     assert_eq!( 'i', command.operation );
     let ( _initial, _final ) = default_addrs( command.address_initial,
                                               command.address_final,
-                                              buffer.get_current_line_number(),
-                                              buffer.get_current_line_number(),
+                                              buffer.get_current_address(),
+                                              buffer.get_current_address(),
                                             );
-    buffer.set_current_line_number( _final - 1 );
+    buffer.set_current_address( _final - 1 );
     state.mode = EditorMode::Insert;
     Ok( () )
 }//}}}
@@ -279,8 +277,8 @@ fn join( buffer: &mut Buffer, state: &mut EditorState, command: Command )
     assert_eq!( 'j', command.operation );
     let ( _initial, _final ) = default_addrs( command.address_initial,
                                               command.address_final,
-                                              buffer.get_current_line_number(),
-                                          buffer.get_current_line_number() + 1,
+                                              buffer.get_current_address(),
+                                          buffer.get_current_address() + 1,
                                             );
     try!( buffer.join_lines( _initial, _final ));
     Ok( () )
@@ -290,8 +288,8 @@ fn mark( buffer: &mut Buffer, state: &mut EditorState, command: Command )
     assert_eq!( 'k', command.operation );
     let ( _initial, _final ) = default_addrs( command.address_initial,
                                               command.address_final,
-                                              buffer.get_current_line_number(),
-                                              buffer.get_current_line_number(),
+                                              buffer.get_current_address(),
+                                              buffer.get_current_address(),
                                             );
     // make sure we have been provided a single character for the mark
     let param_len = command.parameters.len();
@@ -328,8 +326,8 @@ fn lines_list( buffer: &mut Buffer, state: &mut EditorState, command: Command )
     assert_eq!( 'l', command.operation );
     let ( _initial, _final ) = default_addrs( command.address_initial,
                                               command.address_final,
-                                              buffer.get_current_line_number(),
-                                              buffer.get_current_line_number(),
+                                              buffer.get_current_address(),
+                                              buffer.get_current_address(),
                                             );
     let stdout = stdout();
     let handle = stdout.lock();
@@ -347,8 +345,8 @@ fn lines_list( buffer: &mut Buffer, state: &mut EditorState, command: Command )
         term_width = 0;
         term_height = 0;
     }
-    for line_num in _initial .. _final + 1 {
-        let line = buffer.get_line_content( line_num ).unwrap_or("");
+    for address in _initial .. _final + 1 {
+        let line = buffer.get_line_content( address ).unwrap_or("");
         try!( writer.write( line_prefix.as_bytes() )
               .map_err(|_| RedError::Stdout));
         ch_written += line_prefix.len();
@@ -389,20 +387,20 @@ fn move_lines( buffer: &mut Buffer, state: &mut EditorState, command: Command )
     let mut destination: usize;
     let ( _initial, _final ) = default_addrs( command.address_initial,
                                               command.address_final,
-                                              buffer.get_current_line_number(),
-                                              buffer.get_current_line_number(),
+                                              buffer.get_current_address(),
+                                              buffer.get_current_address(),
                                             );
     if command.parameters == "0" {
         destination = 0;
     } else {
     destination = try!(parse_address_field( command.parameters, buffer ))
-            .unwrap_or(buffer.get_current_line_number() );
+            .unwrap_or(buffer.get_current_address() );
     }
     try!( buffer.move_lines( &_initial, &_final, &destination ));
     if (_initial-1) <= destination && destination <= _final {
         destination = _initial - 1;
     }
-    buffer.set_current_line_number( destination + 1 + ( _final - _initial ) );
+    buffer.set_current_address( destination + 1 + ( _final - _initial ) );
     Ok( () )
 }//}}}
 // XXX: write built-in implementation in Buffer?
@@ -411,8 +409,8 @@ fn print_numbered( buffer: &mut Buffer, state: &mut EditorState,//{{{
     assert_eq!( 'n', command.operation );
     let ( _initial, _final ) = default_addrs( command.address_initial,
                                               command.address_final,
-                                              buffer.get_current_line_number(),
-                                              buffer.get_current_line_number()
+                                              buffer.get_current_address(),
+                                              buffer.get_current_address()
                                                 );
     let num_lines_f: f64 = buffer.num_lines() as f64 + 1.0_f64;
     let _width = num_lines_f.log10().ceil() as usize;
@@ -423,7 +421,7 @@ fn print_numbered( buffer: &mut Buffer, state: &mut EditorState,//{{{
         print!( "{:width$}|", _num, width = _width );
         println!("{}", _line );
     }
-    buffer.set_current_line_number( _final );
+    buffer.set_current_address( _final );
     Ok( () )
 }//}}}
 /// Display range of lines of buffer in terminal // {{{
@@ -443,14 +441,14 @@ fn print( buffer: &mut Buffer, state: &mut EditorState, command: Command )//{{{
     assert_eq!( 'p', command.operation );
     let ( _initial, _final ) = default_addrs( command.address_initial,
                                               command.address_final,
-                                              buffer.get_current_line_number(),
-                                              buffer.get_current_line_number()
+                                              buffer.get_current_address(),
+                                              buffer.get_current_address()
                                                 );
     for indx in _initial .. ( _final + 1 ) {
         println!("{}", buffer.get_line_content( indx ).expect(
                 "ops::print: called get_line_content on out-of-range line" ) );
     }
-    buffer.set_current_line_number( _final );
+    buffer.set_current_address( _final );
     // TODO: Drop this? Or Keep to avoid unused warnings?
     state.mode = EditorMode::Command;
     Ok( () )
@@ -483,8 +481,8 @@ fn substitute( buffer: &mut Buffer, state: &mut EditorState, command: Command )
     assert_eq!( 's', command.operation );
     let ( _initial, _final ) = default_addrs( command.address_initial,
                                               command.address_final,
-                                              buffer.get_current_line_number(),
-                                              buffer.get_current_line_number(),
+                                              buffer.get_current_address(),
+                                              buffer.get_current_address(),
                                             );
     let sub_parms: Substitution = try!( parse_substitution_parameter(
             command.parameters ));
@@ -498,14 +496,14 @@ fn transfer( buffer: &mut Buffer, state: &mut EditorState, command: Command )
     let destination: usize;
     let ( _initial, _final ) = default_addrs( command.address_initial,
                                               command.address_final,
-                                              buffer.get_current_line_number(),
-                                              buffer.get_current_line_number(),
+                                              buffer.get_current_address(),
+                                              buffer.get_current_address(),
                                             );
     if command.parameters == "0" {
         destination = 0;
     } else {
     destination = try!(parse_address_field( command.parameters, buffer ))
-            .unwrap_or(buffer.get_current_line_number() );
+            .unwrap_or(buffer.get_current_address() );
     }
     try!( buffer.copy_lines( _initial, _final, destination ));
     Ok( () )

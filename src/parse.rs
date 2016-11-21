@@ -12,7 +12,7 @@
 // Bring in to namespace {{{
 use std::str::Bytes;
 
-use regex::{Regex, Captures};
+use ::regex::{Regex, Captures};
 
 use error::*;
 use io::*;
@@ -162,13 +162,13 @@ fn parse_address_list( address_string: &str ) -> (&str, &str) {// {{{
 }// }}}
 // }}}
 /// Ensure line number is in buffer range// {{{
-fn normalize_line_num( buffer: &Buffer, line_num: usize ) -> usize {// {{{
-    if line_num > buffer.num_lines() {
+fn normalize_address( buffer: &Buffer, address: usize ) -> usize {// {{{
+    if address > buffer.num_lines() {
         buffer.num_lines()
-    } else if line_num < 1 {
+    } else if address < 1 {
         1
     } else {
-        line_num
+        address
     }
     // not reached
 }// }}}
@@ -187,7 +187,7 @@ fn calc_address_field( address: &str, buffer: &Buffer )// {{{
     let mut next_step_str: &str;
     // Parse left operand value
     if operand_lstr == "." || operand_lstr == "" {
-        operand_adds = buffer.get_current_line_number();
+        operand_adds = buffer.get_current_address();
     } else if operand_lstr == "$" {
         operand_adds = buffer.num_lines();
     } else {
@@ -240,7 +240,7 @@ fn calc_address_field( address: &str, buffer: &Buffer )// {{{
     if operand_subs > operand_adds {
         Ok( Some( 1 ))
     } else {
-        Ok( Some( normalize_line_num( &buffer, operand_adds - operand_subs ) ))
+        Ok( Some( normalize_address( &buffer, operand_adds - operand_subs ) ))
     }
 }// }}}
 // }}}
@@ -256,14 +256,14 @@ pub fn parse_address_field( address: &str, buffer: &Buffer )// {{{
     } else if address.len() == 1 && address != "+" && address != "-" {
         match address {
             "." => {
-                Ok( Some( buffer.get_current_line_number() ))
+                Ok( Some( buffer.get_current_address() ))
             },
             "$" => {
                 Ok( Some( buffer.num_lines() ))
             },
             _ => {
                 match address.parse() {
-                Ok(x) => Ok( Some( normalize_line_num( &buffer, x ) )),
+                Ok(x) => Ok( Some( normalize_address( &buffer, x ) )),
                 Err(_) => Err( RedError::AddressSyntax {
                     address: address.to_string() } ),
                 }
@@ -283,7 +283,7 @@ pub fn parse_address_field( address: &str, buffer: &Buffer )// {{{
             calc_address_field( _address, &buffer )
         } else {                                // just a (multi-digit) number
             match _address.parse() {
-            Ok(x) => Ok( Some( normalize_line_num( &buffer, x ) )),
+            Ok(x) => Ok( Some( normalize_address( &buffer, x ) )),
             Err(_) => Err( RedError::AddressSyntax{
                     address: _address.to_string() } )
             }
@@ -335,11 +335,9 @@ pub fn sub_captures( original: &str, captures: Captures )// {{{
         -> String {
     let mut result: String = String::new();
     let re = Regex::new( SUB_REGEX_BACKREF ).unwrap();
-    let mut count: usize = 0;
     let mut last_end: usize = 0;
     let mut orig_captures = re.captures_iter( original );
     for ( start, end ) in re.find_iter( original ) {
-        count += 1;
         match orig_captures.next() {
             Some(cap) => {
                 result += &original[ last_end .. start ];
@@ -550,7 +548,7 @@ mod tests {
         let mut buffer = Buffer::new( BufferInput::Command( test_command ),
                 &EditorState{ mode: EditorMode::Command, help: true } ).unwrap();
         buffer.set_file_name( &test_file );
-        buffer.set_current_line_number( 1 );
+        buffer.set_current_address( 1 );
         buffer
     }// }}}
     /// deconstruct buffer from "command buffer" test;
