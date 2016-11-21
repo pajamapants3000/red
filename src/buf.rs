@@ -699,6 +699,32 @@ impl Buffer {   //{{{
         self.set_line_content( address, &new_line );
         // Approach 2 - repeat the above match on sub_parms.which
     }// }}}
+    pub fn join_lines( &mut self,
+                       address_initial: usize, address_final: usize )
+            -> Result<(), RedError> {
+        let mut new_line = String::new();
+        let mut line: Option<String>;
+        for _ in address_initial .. address_final + 1 {
+            line = self.get_line_content( address_initial )
+                .map(|x| x.to_string() );
+            match line {
+                Some(x) => {
+                    new_line.push_str( &x );
+                    try!( self.delete_line( address_initial ));
+                },
+                None => break,
+            }
+        }
+        if address_initial == 0 {
+            self.insert_line( 0, &new_line );
+            self.current_line = 1;
+        } else {
+            self.insert_line( address_initial - 1, &new_line );
+            self.current_line = address_initial;
+        }
+        try!( self.store_buffer() );
+        Ok( () )
+    }
     pub fn move_lines( &mut self, address_initial: &usize,// {{{
                        address_final: &usize, destination: &usize )
             -> Result<(), RedError> {

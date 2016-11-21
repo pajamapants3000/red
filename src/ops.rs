@@ -277,27 +277,12 @@ fn insert( buffer: &mut Buffer, state: &mut EditorState, command: Command )
 fn join( buffer: &mut Buffer, state: &mut EditorState, command: Command )
         -> Result<(), RedError> {// {{{
     assert_eq!( 'j', command.operation );
-    let mut new_line = String::new();
     let ( _initial, _final ) = default_addrs( command.address_initial,
                                               command.address_final,
                                               buffer.get_current_line_number(),
                                           buffer.get_current_line_number() + 1,
                                             );
-    for line in _initial .. _final + 1 {
-        match buffer.get_line_content( line ) {
-            Some(x) => {
-                new_line.push_str( &x );
-            },
-            None => break,
-        }
-    }
-    try!( delete( buffer, state, Command{
-        address_initial: _initial,
-        address_final: _final,
-        operation: 'd', parameters: "" } ));
-    buffer.insert_line( _initial, &new_line );
-    buffer.set_current_line_number( _initial );
-    try!( buffer.store_buffer() );
+    try!( buffer.join_lines( _initial, _final ));
     Ok( () )
 }//}}}
 fn mark( buffer: &mut Buffer, state: &mut EditorState, command: Command )
@@ -337,6 +322,7 @@ fn mark( buffer: &mut Buffer, state: &mut EditorState, command: Command )
     Ok( () )
 
 }//}}}
+// XXX: write built-in implementation in Buffer?
 fn lines_list( buffer: &mut Buffer, state: &mut EditorState, command: Command )
         -> Result<(), RedError> {// {{{
     assert_eq!( 'l', command.operation );
@@ -419,6 +405,7 @@ fn move_lines( buffer: &mut Buffer, state: &mut EditorState, command: Command )
     buffer.set_current_line_number( destination + 1 + ( _final - _initial ) );
     Ok( () )
 }//}}}
+// XXX: write built-in implementation in Buffer?
 fn print_numbered( buffer: &mut Buffer, state: &mut EditorState,//{{{
                    command: Command ) -> Result<(), RedError> {
     assert_eq!( 'n', command.operation );
