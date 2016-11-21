@@ -495,7 +495,20 @@ fn substitute( buffer: &mut Buffer, state: &mut EditorState, command: Command )
 fn transfer( buffer: &mut Buffer, state: &mut EditorState, command: Command )
         -> Result<(), RedError> {// {{{
     assert_eq!( 't', command.operation );
-    placeholder( buffer, state, command )
+    let destination: usize;
+    let ( _initial, _final ) = default_addrs( command.address_initial,
+                                              command.address_final,
+                                              buffer.get_current_line_number(),
+                                              buffer.get_current_line_number(),
+                                            );
+    if command.parameters == "0" {
+        destination = 0;
+    } else {
+    destination = try!(parse_address_field( command.parameters, buffer ))
+            .unwrap_or(buffer.get_current_line_number() );
+    }
+    try!( buffer.copy_lines( _initial, _final, destination ));
+    Ok( () )
 }//}}}
 fn undo( buffer: &mut Buffer, state: &mut EditorState, command: Command )
         -> Result<(), RedError> {// {{{

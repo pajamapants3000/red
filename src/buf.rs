@@ -696,7 +696,8 @@ impl Buffer {   //{{{
             }
         }
         // Approach 1 - set line content regardless, sometimes to same
-        self.set_line_content( address, &new_line );
+        self.set_line_content( address, &new_line )
+            .expect("error setting line content");
         // Approach 2 - repeat the above match on sub_parms.which
     }// }}}
     pub fn join_lines( &mut self,
@@ -749,6 +750,23 @@ impl Buffer {   //{{{
             }
             _destination += 1;
         }
+        Ok( () )
+    }// }}}
+    pub fn copy_lines( &mut self, address_initial: usize,// {{{
+                       address_final: usize, destination: usize )
+            -> Result<(), RedError> {
+        let mut line: String;
+        for address in address_initial .. address_final + 1 {
+            if address > destination {
+                line = self.get_line_content( 2 * address - address_initial )
+                        .unwrap_or("").to_string();
+            } else {
+                line = self.get_line_content( address )
+                        .unwrap_or("").to_string();
+            }
+            self.insert_line( destination + address - address_initial, &line );
+        }
+        self.current_line = destination + 1 + address_final - address_initial;
         Ok( () )
     }// }}}
 }   //}}}
