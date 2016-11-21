@@ -105,13 +105,6 @@ fn mode_noop( mode: &mut EditorMode ) -> EditorMode {// {{{
     }
 }// }}}
 // }}}
-/// Avoid `unused` warnings for functions that don't modify state.buffer// {{{
-fn buffer_noop( buffer: &mut Buffer ) -> &mut Buffer {// {{{
-    let temp = buffer.get_current_address();
-    buffer.set_current_address( temp );
-    buffer
-}// }}}
-// }}}
 /// A simple placeholder function for unimplemented features// {{{
 fn placeholder( state: &mut EditorState, command: Command)//{{{
         -> Result<(), RedError> {

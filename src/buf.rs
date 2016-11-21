@@ -15,7 +15,7 @@ use std::io::{BufReader, BufWriter, stdout};
 use std::fs::{self, File, rename};
 use std::path::{Path, PathBuf};
 use std::collections::LinkedList;
-use std::collections::linked_list::{self, Iter, IterMut};
+use std::collections::linked_list::{self, Iter};
 use std::iter::{IntoIterator, FromIterator, Iterator, Take, Skip};
 use std::{thread, time};
 use std::ffi::OsStr;
@@ -71,7 +71,7 @@ pub struct Buffer {     //{{{
     /// true if file has been modified since last write
     _is_modified: bool,
     /// Date and time of last read of source file
-    last_update: DateTime<UTC>,
+    //last_update: DateTime<UTC>,
     /// Date and time of last write to disk under temporary file name
     last_temp_write: DateTime<UTC>,
     /// Date and time of last write to disk under permanent file name
@@ -94,10 +94,12 @@ impl Buffer {   //{{{
             current_line: _total_lines,     // usize; should be Copy
             total_lines: _total_lines,
             _is_modified: false,
+            /*  Comment until it becomes relevant
             last_update: match &content {
                 &BufferInput::File(_) => UTC::now(),
                 _ => get_null_time(),
             },
+            */
             last_temp_write: match &content {
                 &BufferInput::File(_) => UTC::now(),
                 _ => get_null_time(),
@@ -163,11 +165,6 @@ impl Buffer {   //{{{
     /// Return true if buffer modified since last write// {{{
     pub fn is_modified( &self ) -> bool {// {{{
         self._is_modified
-    }// }}}
-// }}}
-    /// Return true if buffer modified since last write// {{{
-    pub fn set_modified( &mut self, is_modified: bool ) {// {{{
-        self._is_modified = is_modified;
     }// }}}
 // }}}
     // later, change approach to homogenize file/stdout source
@@ -252,35 +249,10 @@ impl Buffer {   //{{{
             .take(( address_final + 1 ) - address_initial )
     }// }}}
 // }}}
-    /// Return mutable iterator over range of lines in buffer// {{{
-    ///
-    /// This poses a problem - how do we keep track of modifications?
-    /// we might want to eliminate this.
-    pub fn mut_range_iterator<'a>( &'a mut self, address_initial: usize,// {{{
-                           address_final: usize ) -> Take<
-            Skip<linked_list::IterMut<'a, String> >> {
-        // Make sure caller did their job!
-        assert_addresses( address_initial, address_final, self.total_lines );
-        // now let's do ours...
-        let lines_ref: &'a mut LinkedList<String> = &mut self.lines;
-        lines_ref.into_iter()
-            .skip( address_initial - 1 )
-            .take(( address_final + 1 ) - address_initial )
-    }// }}}
-// }}}
     /// Return iterator over all lines in buffer// {{{
     ///
     pub fn lines_iterator( &self ) -> Iter<String> {
         let lines_ref: &LinkedList<String> = &self.lines;
-        lines_ref.into_iter()
-    }// }}}
-// }}}
-    /// Return mutable iterator over lines in buffer// {{{
-    ///
-    /// This poses a problem - how do we keep track of modifications?
-    /// we might want to eliminate this.
-    pub fn mut_lines_iterator( &mut self ) -> IterMut<String> {// {{{
-        let mut lines_ref: &mut LinkedList<String> = &mut self.lines;
         lines_ref.into_iter()
     }// }}}
 // }}}
@@ -391,6 +363,9 @@ impl Buffer {   //{{{
     }// }}}
 // }}}
     /// Return immutable slice over all markers// {{{
+    ///
+    /// Will add operation for this at some point; until then, commented out
+    /*
     pub fn list_markers( &self ) {// {{{
         let mut indx: u8 = 0;
         for marker in &self.markers {
@@ -401,6 +376,7 @@ impl Buffer {   //{{{
         }
     }// }}}
 // }}}
+    */
     /// Write buffer contents to temp file// {{{
     ///
     /// TODO: Delete on buffer destruct or at least on program exit
@@ -487,19 +463,6 @@ impl Buffer {   //{{{
         }
         Ok( () )
 
-    }// }}}
-// }}}
-    /// Determine whether line matches regex// {{{
-    ///
-    /// Do NOT use for search over multiple lines - will be very inefficient!
-    /// Use find_match instead
-    pub fn does_line_match( &self, line: usize, regex: &str ) -> bool {// {{{
-        let re: Regex = Regex::new( regex ).unwrap();
-        let haystack = self.get_line_content( line );
-        match haystack {
-            Some( line ) => re.is_match( line ),
-            None => false
-        }
     }// }}}
 // }}}
     /// Return number of next matching line// {{{
@@ -589,6 +552,9 @@ impl Buffer {   //{{{
     /// old one should be deleted automatically; use on_close to
     /// check for unsaved changes and ensure the buffer temp file
     /// is deleted.
+    /// Until I can determine if this is needed, I will keep it and
+    /// just comment it out.
+    /*
     pub fn destruct( &mut self )
             -> Result<(), RedError> {// {{{
         if self.is_modified() {
@@ -609,6 +575,7 @@ impl Buffer {   //{{{
         self.last_write = get_null_time();
         Ok( () )
     }// }}}
+    */
     /// Keep markers valid after inserting new line
     ///
     /// I can't think of any errors that might go here
