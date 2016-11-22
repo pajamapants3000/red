@@ -104,26 +104,22 @@ pub fn get_input( mut input_buffer: String, state: &EditorState )
 
     loop {
         match input_buffer.pop() {
-            Some(x) => {
-                assert_eq!( x, '\\' );
-            },
+            Some(x) => assert_eq!( x, '\\' ),
             None => {},
         }
 
         try!( stdout_handle.write( prompt.as_bytes() )
               .map_err( |_| RedError::Stdout ));
         try!( stdout_handle.flush().map_err( |_| RedError::Stdout ));
-        try!( stdin_handle.read_line( &mut input_buffer.to_string() )
+        try!( stdin_handle.read_line( &mut input_buffer )
               .map_err( |_| RedError::Stdin ));
 
         match input_buffer.pop() {
-            Some(x) => {
-                assert_eq!( x, '\n' );
-            },
+            Some(x) => assert_eq!( x, '\n' ),
             None => {},
         }
 
-        if !RE.is_match( &input_buffer ) {
+        if !RE.is_match( &mut input_buffer ) {
             break;
         }
         prompt = PROMPT_CONTINUE;

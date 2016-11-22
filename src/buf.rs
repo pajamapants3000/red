@@ -727,6 +727,32 @@ impl Buffer {   //{{{
         Ok( () )
     }// }}}
 }   //}}}
+impl Clone for Buffer {
+    fn clone( &self ) -> Self {
+        let _lines = self.lines.clone();
+        let _file = match &self.file {
+            &Some(ref f) => Some(f.clone()),
+            &None => None,
+        };
+        let mut _markers: Vec<usize> = Vec::new();
+        for marker in &self.markers {
+            _markers.push( *marker );
+        }
+        let _last_temp_write = self.last_temp_write.clone();
+        let _last_write = self.last_write.clone();
+        Buffer{
+            lines: _lines,
+            buffer_file: self.buffer_file.clone(),
+            file: _file,
+            markers: _markers,
+            _is_modified: self._is_modified,
+            current_line: self.current_line,
+            total_lines: self.total_lines,
+            last_write: _last_write,
+            last_temp_write: _last_temp_write,
+        }
+    }
+}
 
 // ^^^ Data Structures ^^^ }}}
 

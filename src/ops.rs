@@ -26,7 +26,7 @@ use std::io::{Write, BufRead, BufWriter, stdout, StdoutLock, stdin};
 use buf::*;
 use error::*;
 use parse::*;
-use ::{EditorState, EditorMode, print_help, term_size};
+use ::{EditorState, EditorMode, print_help, print_msg, term_size};
 // ^^^ Bring in to namespace ^^^ }}}
 
 // *** Attributes *** {{{
@@ -108,12 +108,12 @@ fn mode_noop( mode: &mut EditorMode ) -> EditorMode {// {{{
 /// A simple placeholder function for unimplemented features// {{{
 fn placeholder( state: &mut EditorState, command: Command)//{{{
         -> Result<(), RedError> {
-    print_help( state, &format!(
+    print_msg( state, &format!(
             "Operation not yet implemented: {}", command.operation ));
     state.mode = mode_noop( &mut state.mode );
     match state.buffer.get_file_name() {
         Some( file_name ) => {
-            print_help( state, &format!(
+            print_msg( state, &format!(
                     "Continuing work on {}", file_name ));
             return Err(
                 RedError::InvalidOperation{ operation: command.operation } );
@@ -190,7 +190,7 @@ fn edit_unsafe( state: &mut EditorState, command: Command )
                 return Err(e);
             },
         };
-        print_help( &state, &format!( "Now editing output of command: {}",
+        print_msg( &state, &format!( "Now editing output of command: {}",
                                      state.buffer.get_file_name()
                                      .unwrap_or( "<untitled>" ) ));
     } else {                    // process file
@@ -202,7 +202,7 @@ fn edit_unsafe( state: &mut EditorState, command: Command )
                 return Err(e);
             },
         };
-        print_help( &state, &format!( "Now editing file: {}",
+        print_msg( &state, &format!( "Now editing file: {}",
                                      state.buffer.get_file_name()
                                      .unwrap_or( "<untitled>" ) ));
     }

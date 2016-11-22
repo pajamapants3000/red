@@ -1,9 +1,12 @@
 * allow whitespace inside address expression
-* sub
 * undo
 * global (+int, rev)
 * // and ?? repeat last search
-* replace "line_number" with "address" as in "set_line_number"
-* replace "insert_here" and "insert_line" with "append..."
 * accept escaped '/' and '?' in fwd and rev regex searches, respectively
+* accept any delimiter in sub commands, not just /
+* organize code - particularly buffer methods
+* add many more tests; would love to separate them if possible
+* buffer should handle current address itself
+* buffer should handle is_modified itself
+* buffer should handle close (check is_modified, delete temp) itself
 

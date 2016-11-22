@@ -52,6 +52,36 @@ pub enum WhichMatch {
 // ^^^ Data Structures ^^^ }}}
 
 // *** Functions *** {{{
+/// Parses invocation {{{
+pub fn parse_invocation( invoc_input: Vec<String>, state: &mut EditorState ) {//{{{
+    let mut indx: usize = 1;
+    while indx < invoc_input.len() {
+        if invoc_input[indx] == "-s" || invoc_input[indx] == "-" {
+            state.help = false;
+            state.messages = false;
+            //println!( "help and messages turned off (except this one)" );
+            println!( "SILENT MODE ACTIVE" );
+        } else if invoc_input[indx] == "-p" {
+            if indx + 1 < invoc_input.len() {
+                indx += 1;
+                state.prompt = invoc_input[indx].clone();
+                println!( "prompt set to {}", &state.prompt );
+            } else {
+                println!( "no prompt provided to \"-p\" flag" );
+            }
+        } else if &invoc_input[indx][0..1] == "-" {
+            println!( "unrecognized flag: {}", invoc_input[indx] );
+        } else {
+            if state.source.len() == 0 {
+                state.source = invoc_input[indx].clone();
+            } else {
+                println!( "only the first commnand or file name accepted" );
+            }
+        }
+        indx += 1;
+    }
+}//}}}
+//}}}}
 /// Parses command-mode input {{{
 ///
 /// This is the public interface to the parse module
