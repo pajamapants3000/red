@@ -26,8 +26,10 @@ use ::{EditorState, EditorMode};
 // *** Constants *** {{{
 const ADDR_REGEX_FWDSEARCH: &'static str = r#"/([^/]*)/"#;
 const ADDR_REGEX_REVSEARCH: &'static str = r#"\?([^\?]*)\?"#;
-const ADDR_REGEX_RITHMETIC: &'static str = r#"(\d*|.|$)(((\+|-)(\d*))+)"#;
-const ADDR_REGEX_ADDORSUBT: &'static str = r#"((\+|-)(\d*))(((\+|-)(\d*))*)"#;
+const ADDR_REGEX_RITHMETIC: &'static str =
+        r#"\w*(\d*|.|$)\w*(((\+|-)\w*(\d*))+)\w*"#;
+const ADDR_REGEX_ADDORSUBT: &'static str =
+        r#"\w*((\+|-)\w*(\d*))\w*(((\+|-)\w*(\d*))*)\w*"#;
 const ADDR_REGEX_MARKER:    &'static str = r#"'([:lower:])"#;
 const SUB_REGEX_PARAMETER:  &'static str = r#"/(.*)/(.*)/(.*)"#;
 const SUB_REGEX_BACKREF:    &'static str = r#"\\([0-9])"#;
@@ -138,7 +140,7 @@ pub fn parse_command<'a>( _cmd_input: &'a str, state: &EditorState )//{{{
 /// Probably want to ignore. or error?
 fn get_address_range( address_string: &str, buffer: &Buffer )// {{{
             -> Result<(usize, usize), RedError> {
-    let (left, right) = match address_string {
+    let (left, right) = match address_string.trim() {
         "%" => ( "1", "$" ),
         "," => ( "1", "$" ),
         ";" => ( ".", "$" ),
@@ -549,10 +551,8 @@ fn is_in_regex( text: &str, indx: usize ) -> bool {// {{{
 mod tests {
     use super::{get_opchar_index, is_in_regex, parse_address_field, parse_address_list, get_address_range, is_address_separator};
     use buf::*;
-    use ::{EditorMode, EditorState};
 
-    const COMMAND_CONTENT_LINE_1: &'static str = "testcmd";
-    const COMMAND_CONTENT_LINE_2: &'static str = "testcmda testcmdb";
+    const COMMAND_CONTENT_LINE: &'static str = "this is a test; number";
     const COMMAND_FILE_SUFFIX: &'static str = ".cmd";
     const TEST_FILE: &'static str = "red_filetest";
 
@@ -560,15 +560,10 @@ mod tests {
     ///
     /// uses test_lines function to create file with which buffer
     /// is initialized
-    pub fn open_command_buffer_test( test_num: u8, command_line_version: u8 )// {{{
-            -> Buffer {
+    pub fn open_command_buffer_test( test_num: u8 ) -> Buffer {// {{{
         //
         let num_lines: usize = 7;   // number of lines to have in buffer
-        let command_content_line = match command_line_version {
-            1_u8 => COMMAND_CONTENT_LINE_1,
-            2_u8 => COMMAND_CONTENT_LINE_2,
-            _ => "",
-        };
+        let command_content_line = COMMAND_CONTENT_LINE;
         let test_file: String = TEST_FILE.to_string() +
                 COMMAND_FILE_SUFFIX + test_num.to_string().as_str();
         let test_command = "echo -e ".to_string() +
@@ -576,16 +571,14 @@ mod tests {
                                     num_lines );
         let mut buffer = Buffer::new( BufferInput::Command( test_command ))
                 .unwrap();
-        buffer.set_file_name( &test_file );
+        buffer.set_file_name( &test_file ).unwrap();
         buffer.set_current_address( 1 );
         buffer
     }// }}}
     /// deconstruct buffer from "command buffer" test;
     /// any other necessary closing actions
     pub fn close_command_buffer_test( buffer: &mut Buffer ) {// {{{
-        buffer.set_modified( false );
-        buffer.destruct( EditorState{ mode: EditorMode::Command, help: true })
-            .unwrap();
+        buffer.destruct();
     }// }}}
     // begin prep functions
     /// Generate and return string containing lines for testing
@@ -746,10 +739,8 @@ mod tests {
     fn get_address_range_test_1() {
         // set contstants
         let test_num: u8 = 1;
-        let command_line_version: u8 = 1;
         //
-        let mut buffer = open_command_buffer_test( test_num,
-                                                   command_line_version );
+        let mut buffer = open_command_buffer_test( test_num );
         let address_string: &str = "1, 3";
         let ini_expected: usize = 1;
         let fin_expected: usize = 3;
@@ -765,10 +756,8 @@ mod tests {
     fn get_address_range_test_2() {
         // set contstants
         let test_num: u8 = 2;
-        let command_line_version: u8 = 1;
         //
-        let mut buffer = open_command_buffer_test( test_num,
-                                                   command_line_version );
+        let mut buffer = open_command_buffer_test( test_num );
         let address_string: &str = "1, 56";
         let ini_expected: usize = 1;
         let fin_expected: usize = 8;
@@ -784,10 +773,8 @@ mod tests {
     fn get_address_range_test_3() {
         // set contstants
         let test_num: u8 = 3;
-        let command_line_version: u8 = 1;
         //
-        let mut buffer = open_command_buffer_test( test_num,
-                                                   command_line_version );
+        let mut buffer = open_command_buffer_test( test_num );
         let address_string: &str = "0, 4";
         let ini_expected: usize = 1;
         let fin_expected: usize = 4;
@@ -803,10 +790,8 @@ mod tests {
     fn get_address_range_test_4() {
         // set contstants
         let test_num: u8 = 4;
-        let command_line_version: u8 = 1;
         //
-        let mut buffer = open_command_buffer_test( test_num,
-                                                   command_line_version );
+        let mut buffer = open_command_buffer_test( test_num );
         let address_string: &str = "/testcmd1/, 5";
         let ini_expected: usize = 1;
         let fin_expected: usize = 5;
@@ -857,8 +842,8 @@ mod tests {
     #[test]
     fn parse_address_list_test_4() {
         // set contstants
-        let address_string: &str = "/testcmd3/, 5";
-        let ini_expected: &str = "/testcmd3/";
+        let address_string: &str = "/number3/, 5";
+        let ini_expected: &str = "/number3/";
         let fin_expected: &str = "5";
         //
         let ( ini, fin ) = parse_address_list( address_string );
@@ -870,10 +855,8 @@ mod tests {
     fn parse_address_field_test_1() {
         // set contstants
         let test_num: u8 = 1;
-        let command_line_version: u8 = 1;
         //
-        let mut buffer = open_command_buffer_test( test_num,
-                                                   command_line_version );
+        let mut buffer = open_command_buffer_test( test_num );
         let address_string: &str = "1";
         let expected: usize = 1;
         //
@@ -889,10 +872,8 @@ mod tests {
     fn parse_address_field_test_2() {
         // set contstants
         let test_num: u8 = 2;
-        let command_line_version: u8 = 1;
         //
-        let mut buffer = open_command_buffer_test( test_num,
-                                                   command_line_version );
+        let mut buffer = open_command_buffer_test( test_num );
         let address_string: &str = "56";
         let expected: usize = 8;            // num_lines
         //
@@ -908,10 +889,8 @@ mod tests {
     fn parse_address_field_test_3() {
         // set contstants
         let test_num: u8 = 3;
-        let command_line_version: u8 = 1;
         //
-        let mut buffer = open_command_buffer_test( test_num,
-                                                   command_line_version );
+        let mut buffer = open_command_buffer_test( test_num );
         let address_string: &str = "0";
         let expected: usize = 1;
         //
@@ -927,11 +906,9 @@ mod tests {
     fn parse_address_field_test_4() {
         // set contstants
         let test_num: u8 = 4;
-        let command_line_version: u8 = 1;
         //
-        let mut buffer = open_command_buffer_test( test_num,
-                                                   command_line_version );
-        let address_string: &str = "/testcmd3/";
+        let mut buffer = open_command_buffer_test( test_num );
+        let address_string: &str = "/number3/";
         let expected: usize = 3;
         //
         let result = parse_address_field( address_string, &buffer )
@@ -946,11 +923,9 @@ mod tests {
     fn parse_address_field_test_5() {
         // set contstants
         let test_num: u8 = 5;
-        let command_line_version: u8 = 1;
         //
-        let mut buffer = open_command_buffer_test( test_num,
-                                                   command_line_version );
-        let address_string: &str = "?testcmd4?";
+        let mut buffer = open_command_buffer_test( test_num );
+        let address_string: &str = "?number4?";
         let expected: usize = 4;
         //
         let result = parse_address_field( address_string, &buffer )
@@ -965,11 +940,9 @@ mod tests {
     fn parse_address_field_test_6() {
         // set contstants
         let test_num: u8 = 6;
-        let command_line_version: u8 = 1;
         //
-        let mut buffer = open_command_buffer_test( test_num,
-                                                   command_line_version );
-        let address_string: &str = "/cmda te/";     // no match
+        let mut buffer = open_command_buffer_test( test_num );
+        let address_string: &str = "/badtestcmd/";     // no match
         let expected: Option<usize> = None;
         //
         let result = parse_address_field( address_string, &buffer )
@@ -983,11 +956,9 @@ mod tests {
     fn parse_address_field_test_7() {
         // set contstants
         let test_num: u8 = 7;
-        let command_line_version: u8 = 2;
         //
-        let mut buffer = open_command_buffer_test( test_num,
-                                                   command_line_version );
-        let address_string: &str = "/cmda te/";
+        let mut buffer = open_command_buffer_test( test_num );
+        let address_string: &str = "/test; num/";
         let expected: usize = 1;
         //
         let result = parse_address_field( address_string, &buffer )
@@ -1002,10 +973,8 @@ mod tests {
     fn parse_address_field_test_8() {
         // set contstants
         let test_num: u8 = 8;
-        let command_line_version: u8 = 1;
         //
-        let mut buffer = open_command_buffer_test( test_num,
-                                                   command_line_version );
+        let mut buffer = open_command_buffer_test( test_num );
         let address_string: &str = ".-3";
         let expected: usize = 1;
         //
@@ -1021,11 +990,9 @@ mod tests {
     fn parse_address_field_test_9() {
         // set contstants
         let test_num: u8 = 9;
-        let command_line_version: u8 = 1;
         //
-        let mut buffer = open_command_buffer_test( test_num,
-                                                   command_line_version );
-        let address_string: &str = "+";
+        let mut buffer = open_command_buffer_test( test_num );
+        let address_string: &str = "    + ";
         let expected: usize = 2;
         //
         let result = parse_address_field( address_string, &buffer )
@@ -1040,11 +1007,9 @@ mod tests {
     fn parse_address_field_test_10() {
         // set contstants
         let test_num: u8 = 10;
-        let command_line_version: u8 = 1;
         //
-        let mut buffer = open_command_buffer_test( test_num,
-                                                   command_line_version );
-        let address_string: &str = "5-3";
+        let mut buffer = open_command_buffer_test( test_num );
+        let address_string: &str = "5- 3";
         let expected: usize = 2;
         //
         let result = parse_address_field( address_string, &buffer )
@@ -1059,11 +1024,9 @@ mod tests {
     fn parse_address_field_test_11() {
         // set contstants
         let test_num: u8 = 11;
-        let command_line_version: u8 = 1;
         //
-        let mut buffer = open_command_buffer_test( test_num,
-                                                   command_line_version );
-        let address_string: &str = ".+1";
+        let mut buffer = open_command_buffer_test( test_num );
+        let address_string: &str = "  . + 1      ";
         let expected: usize = 2;
         //
         let result = parse_address_field( address_string, &buffer )
@@ -1078,11 +1041,9 @@ mod tests {
     fn parse_address_field_test_12() {
         // set contstants
         let test_num: u8 = 12;
-        let command_line_version: u8 = 1;
         //
-        let mut buffer = open_command_buffer_test( test_num,
-                                                   command_line_version );
-        let address_string: &str = "7--1-3";
+        let mut buffer = open_command_buffer_test( test_num );
+        let address_string: &str = "7 --  1- 3 ";
         let expected: usize = 2;
         //
         let result = parse_address_field( address_string, &buffer )
@@ -1097,11 +1058,9 @@ mod tests {
     fn parse_address_field_test_13() {
         // set contstants
         let test_num: u8 = 13;
-        let command_line_version: u8 = 1;
         //
-        let mut buffer = open_command_buffer_test( test_num,
-                                                   command_line_version );
-        let address_string: &str = ".+1---+5";
+        let mut buffer = open_command_buffer_test( test_num );
+        let address_string: &str = "  . +1-- -+5";
         let expected: usize = 4;
         //
         let result = parse_address_field( address_string, &buffer )
@@ -1116,11 +1075,9 @@ mod tests {
     fn parse_address_field_test_14() {
         // set contstants
         let test_num: u8 = 14;
-        let command_line_version: u8 = 1;
         //
-        let mut buffer = open_command_buffer_test( test_num,
-                                                   command_line_version );
-        let address_string: &str = "$-3";
+        let mut buffer = open_command_buffer_test( test_num );
+        let address_string: &str = "$ - 3";
         let expected: usize = 5;
         //
         let result = parse_address_field( address_string, &buffer )
@@ -1135,11 +1092,9 @@ mod tests {
     fn parse_address_field_test_15() {
         // set contstants
         let test_num: u8 = 15;
-        let command_line_version: u8 = 1;
         //
-        let mut buffer = open_command_buffer_test( test_num,
-                                                   command_line_version );
-        let address_string: &str = "-5";
+        let mut buffer = open_command_buffer_test( test_num );
+        let address_string: &str = " -5";
         let expected: usize = 1;
         //
         let result = parse_address_field( address_string, &buffer )

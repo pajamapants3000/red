@@ -554,14 +554,12 @@ impl Buffer {   //{{{
     /// is deleted.
     /// Until I can determine if this is needed, I will keep it and
     /// just comment it out.
-    /*
-    pub fn destruct( &mut self )
-            -> Result<(), RedError> {// {{{
-        if self.is_modified() {
-            return Err( RedError::NoDestruct );
-        }
-        fs::remove_file( &self.buffer_file )
-            .expect("Failed to delete buffer file");
+    #[cfg(test)]
+    pub fn destruct( &mut self ) {// {{{
+        fs::remove_file( self.get_file_name()
+                                     .unwrap_or( "" ) )
+                                     .map_err( |x| RedError::FileRemove(x) )
+                                     .unwrap();
         // restore all values to defaults - necessary?
         self.lines.clear();
         self.file = None;
@@ -570,12 +568,10 @@ impl Buffer {   //{{{
         self.current_line = 0;
         self.total_lines = 0;
         self._is_modified = false;
-        self.last_update = get_null_time();
+        //XXX: self.last_update = get_null_time();
         self.last_temp_write = get_null_time();
         self.last_write = get_null_time();
-        Ok( () )
     }// }}}
-    */
     /// Keep markers valid after inserting new line
     ///
     /// I can't think of any errors that might go here
@@ -828,8 +824,6 @@ mod tests {// {{{
     use std::io::Write;
     use std::default::Default;
 
-
-    use regex::{Regex, Captures};
     use super::*;
     use error::*;
     use io::*;
@@ -903,7 +897,7 @@ mod tests {// {{{
                                     num_lines );
         let mut buffer = Buffer::new( BufferInput::Command( test_command ))
             .unwrap();
-        buffer.set_file_name( &test_file );
+        buffer.set_file_name( &test_file ).unwrap();
         buffer
     }// }}}
 // }}}
@@ -913,14 +907,15 @@ mod tests {// {{{
     }// }}}
 // }}}
     /// Prep and return buffer for use in "empty buffer" test functions// {{{
+    /*
     fn open_empty_buffer_test() -> Buffer {// {{{
         Buffer::new( BufferInput::None ).unwrap()
     }// }}}
 // }}}
+*/
     /// deconstruct buffer from "file buffer" test// {{{
     /// any other necessary closing actions
     fn close_file_buffer_test( buffer: &mut Buffer ) {// {{{
-        buffer.set_modified( false );
         match fs::remove_file( buffer.get_file_name()
                                      .unwrap_or( "" ) )
                                      .map_err( |x| RedError::FileRemove(x) ) {
@@ -929,14 +924,13 @@ mod tests {// {{{
                 },
                 Ok(_) => {},
             }
-        buffer.destruct().unwrap();
+        buffer.destruct();
     }// }}}
 // }}}
     /// deconstruct buffer from "command buffer" test;// {{{
     /// any other necessary closing actions
     pub fn close_command_buffer_test( buffer: &mut Buffer ) {// {{{
-        buffer.set_modified( false );
-        buffer.destruct().unwrap();
+        buffer.destruct();
     }// }}}
 // }}}
     // end prep functions// }}}
@@ -1038,10 +1032,10 @@ mod tests {// {{{
             assert_eq!( buffer.get_file_name().unwrap(),
                     TEST_FILE.to_string() +
                     FILE_FILE_SUFFIX + test_num.to_string().as_str() );
-            buffer.set_file_name( &alt_file_name );
+            buffer.set_file_name( &alt_file_name ).unwrap();
             assert_eq!( buffer.get_file_name().unwrap(), alt_file_name );
             buffer.set_file_name( &(TEST_FILE.to_string() +
-                FILE_FILE_SUFFIX + test_num.to_string().as_str() ));
+                FILE_FILE_SUFFIX + test_num.to_string().as_str() )).unwrap();
         }
 
         //
@@ -1255,6 +1249,7 @@ mod tests {// {{{
             assert_eq!( _expectation, *line );
         }
     }// }}}
+    #[test]
     fn substitute_test_2() {// {{{
         let test_num: u8 = 2;
         let mut buffer = open_file_buffer_test_gen( test_num,
@@ -1354,11 +1349,9 @@ mod tests {// {{{
     fn substitute_test_6() {// {{{
         let test_num: u8 = 6;
         let mut buffer = open_file_buffer_test( test_num );
-        let num_lines = buffer.num_lines() - 1;
-        let line_to_sub: usize = 8;
         let regex_str: &str = r#"e"#;
         let to_sub: &str = r#"x"#;
-        let mut expectation: String = "txstfilx linx numbxr8".to_string();
+        let expectation: String = "txstfilx linx numbxr8".to_string();
 
         // Apply actual test(s)
         buffer.substitute( regex_str, to_sub, WhichMatch::Global, 8, 8 );

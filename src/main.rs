@@ -77,7 +77,6 @@ fn main() {// {{{
     let operations = Operations::new();
     // Collect invocation arguments
     let args: Vec<String> = env::args().collect();
-    // take as direct arg; will later check for additional -s, -p flags
     parse_invocation( args, &mut state );
     if state.source.len() > 0 {
         // generate and execute edit operation for requested file or command
