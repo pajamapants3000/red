@@ -27,9 +27,9 @@ use ::{EditorState, EditorMode};
 const ADDR_REGEX_FWDSEARCH: &'static str = r#"/([^/]*)/"#;
 const ADDR_REGEX_REVSEARCH: &'static str = r#"\?([^\?]*)\?"#;
 const ADDR_REGEX_RITHMETIC: &'static str =
-        r#"\w*(\d*|.|$)\w*(((\+|-)\w*(\d*))+)\w*"#;
+        r#"\s*(\d*|.|$)\s*(((\+|-)\s*(\d*))+)\s*"#;
 const ADDR_REGEX_ADDORSUBT: &'static str =
-        r#"\w*((\+|-)\w*(\d*))\w*(((\+|-)\w*(\d*))*)\w*"#;
+        r#"\s*((\+|-)\s*(\d*))\s*(((\+|-)\s*(\d*))*)\s*"#;
 const ADDR_REGEX_MARKER:    &'static str = r#"'([:lower:])"#;
 const SUB_REGEX_PARAMETER:  &'static str = r#"/(.*)/(.*)/(.*)"#;
 const SUB_REGEX_BACKREF:    &'static str = r#"\\([0-9])"#;
@@ -210,7 +210,7 @@ fn calc_address_field( address: &str, buffer: &Buffer )// {{{
     let re_rithmetic: Regex = Regex::new( ADDR_REGEX_RITHMETIC ).unwrap();
     let re_addorsubt: Regex = Regex::new( ADDR_REGEX_ADDORSUBT ).unwrap();
     let rithmetic_captures = re_rithmetic.captures( address ).unwrap();
-    let operand_lstr: &str = rithmetic_captures.at( 1 ).unwrap();
+    let operand_lstr: &str = rithmetic_captures.at( 1 ).unwrap().trim();
     let mut operand_adds: usize;
     let mut operand_subs: usize = 0;
     let mut operation_str: &str;
@@ -224,7 +224,7 @@ fn calc_address_field( address: &str, buffer: &Buffer )// {{{
     } else {
         operand_adds = try!( operand_lstr.parse()
                                 .map_err(|_| RedError::AddressSyntax{
-                                address: address.to_string() } ));
+                                address: "calc1:".to_string() + address } ));
     }
 
     next_step_str = rithmetic_captures.at(2).expect(
@@ -242,7 +242,7 @@ fn calc_address_field( address: &str, buffer: &Buffer )// {{{
                     "" => 1,
                     _ => try!( operand_str.parse()
                                 .map_err(|_| RedError::AddressSyntax{
-                                address: address.to_string() } )),
+                                address: "calc2:".to_string() + address } )),
                 };
             },
             "-" => {
@@ -250,12 +250,12 @@ fn calc_address_field( address: &str, buffer: &Buffer )// {{{
                     "" => 1,
                     _ => try!( operand_str.parse()
                                 .map_err(|_| RedError::AddressSyntax{
-                                address: address.to_string() } )),
+                                address: "calc3:".to_string() + address } )),
                 };
             },
             _ => {
                 return Err( RedError::AddressSyntax{
-                    address: address.to_string() });
+                    address: "calc4:".to_string() + address });
             },
         }
 
@@ -263,7 +263,7 @@ fn calc_address_field( address: &str, buffer: &Buffer )// {{{
             Some( "" ) => break,
             Some( x )  => next_step_str = x,
             None => return Err( RedError::AddressSyntax{
-                    address: address.to_string() }),
+                    address: "calc5:".to_string() + address }),
         }
         next_step_caps = re_addorsubt.captures( next_step_str ).unwrap();
     }
@@ -296,7 +296,7 @@ pub fn parse_address_field( address: &str, buffer: &Buffer )// {{{
                 match address.parse() {
                 Ok(x) => Ok( Some( normalize_address( &buffer, x ) )),
                 Err(_) => Err( RedError::AddressSyntax {
-                    address: address.to_string() } ),
+                    address: "parsefield1:".to_string() + address } ),
                 }
             },
         }
@@ -316,7 +316,7 @@ pub fn parse_address_field( address: &str, buffer: &Buffer )// {{{
             match _address.parse() {
             Ok(x) => Ok( Some( normalize_address( &buffer, x ) )),
             Err(_) => Err( RedError::AddressSyntax{
-                    address: _address.to_string() } )
+                    address: "parsefield2:".to_string() + _address } )
             }
         }
     }
@@ -571,7 +571,7 @@ mod tests {
                                     num_lines );
         let mut buffer = Buffer::new( BufferInput::Command( test_command ))
                 .unwrap();
-        buffer.set_file_name( &test_file ).unwrap();
+        buffer.move_file( &test_file ).unwrap();
         buffer.set_current_address( 1 );
         buffer
     }// }}}
@@ -792,11 +792,12 @@ mod tests {
         let test_num: u8 = 4;
         //
         let mut buffer = open_command_buffer_test( test_num );
-        let address_string: &str = "/testcmd1/, 5";
+        let address_string: &str = "/number1/, 5";
         let ini_expected: usize = 1;
         let fin_expected: usize = 5;
         //
-        let ( ini, fin ) = get_address_range( address_string, &buffer ).unwrap();
+        let ( ini, fin ) = get_address_range( address_string, &buffer )
+            .unwrap_or( (0_usize, 0_usize) );
         assert_eq!( ini, ini_expected );
         assert_eq!( fin, fin_expected );
         // Common test close routine

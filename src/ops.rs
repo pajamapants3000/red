@@ -22,6 +22,7 @@
 use std::collections::hash_map::HashMap;
 use std::process::exit;
 use std::io::{Write, BufRead, BufWriter, stdout, StdoutLock, stdin};
+use std::ffi::OsStr;
 
 use buf::*;
 use error::*;
@@ -114,7 +115,8 @@ fn placeholder( state: &mut EditorState, command: Command)//{{{
     match state.buffer.get_file_name() {
         Some( file_name ) => {
             print_msg( state, &format!(
-                    "Continuing work on {}", file_name ));
+                    "Continuing work on {}", file_name.to_str()
+                            .unwrap_or("<invalid UTF-8>")) );
             return Err(
                 RedError::InvalidOperation{ operation: command.operation } );
         }
@@ -192,7 +194,9 @@ fn edit_unsafe( state: &mut EditorState, command: Command )
         };
         print_msg( &state, &format!( "Now editing output of command: {}",
                                      state.buffer.get_file_name()
-                                     .unwrap_or( "<untitled>" ) ));
+                                     .unwrap_or( OsStr::new("<untitled>") )
+                                     .to_str()
+                                     .unwrap_or( "<invalid UTF-8>" ) ));
     } else {                    // process file
         match Buffer::new(BufferInput::File( content.to_string() )) {
             Ok( _buffer ) => {
@@ -204,7 +208,9 @@ fn edit_unsafe( state: &mut EditorState, command: Command )
         };
         print_msg( &state, &format!( "Now editing file: {}",
                                      state.buffer.get_file_name()
-                                     .unwrap_or( "<untitled>" ) ));
+                                     .unwrap_or( OsStr::new("<untitled>") )
+                                     .to_str()
+                                     .unwrap_or( "<invalid UTF-8>" ) ));
     }
     Ok( () )
 }//}}}
@@ -213,11 +219,12 @@ fn filename( state: &mut EditorState, command: Command )
     assert_eq!( 'f', command.operation );
     if command.parameters == "" {
         match state.buffer.get_file_name() {
-            Some(f) => println!( "filename: {}", f ),
+            Some(f) => println!( "filename: {}", f.to_str()
+                            .unwrap_or("<invalid UTF-8>") ),
             None => println!( "no filename currently set" ),
         }
     } else {
-        try!( state.buffer.set_file_name( command.parameters ));
+        try!( state.buffer.set_file( command.parameters ));
     }
     Ok( () )
 }//}}}

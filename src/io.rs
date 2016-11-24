@@ -11,8 +11,10 @@
 
 // *** Bring in to namespace *** {{{
 use std::fs::{File, OpenOptions};
+use std::path::Path;
 use std::process::{Command, Output};
 use std::io::{self, BufRead, Write};
+use std::ffi::OsStr;
 
 use regex::Regex;
 
@@ -61,7 +63,8 @@ regex_search( needle: &str, from: FileCoordinate ) -> FileCoordinate {
 ///
 /// Returns direct result of call to OpenOptions::new()
 /// This is of type Result<File, io::Error>
-pub fn file_opener( name: &str, mode: FileMode ) -> Result<File, RedError> {// {{{
+pub fn file_opener<S: AsRef<OsStr> + ?Sized>( name: &S, mode: FileMode )
+        -> Result<File, RedError> {// {{{
 
     // let's introduce OpenOptions now, though we don't need it
     // until we introduce more functionality
@@ -72,7 +75,7 @@ pub fn file_opener( name: &str, mode: FileMode ) -> Result<File, RedError> {// {
         .truncate(mode.f_truncate)
         .create(mode.f_create)
         .create_new(mode.f_create_new)
-        .open( name ).map_err(|err| RedError::FileOpen( err ) )
+        .open( Path::new(name) ).map_err(|err| RedError::FileOpen( err ) )
 }// }}}
 /// Get input from stdin// {{{
 ///

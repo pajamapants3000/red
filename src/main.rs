@@ -85,7 +85,7 @@ fn main() {// {{{
         operations.execute( &mut state, command )
             .expect( "main: failed to initialize buffer" );
     } else {
-        state.buffer.set_file_name( "untitled" )
+        state.buffer.set_file( "untitled" )
             .expect("main: failed to set file name");
     }
     let mut input: String = String::new();
