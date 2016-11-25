@@ -228,13 +228,43 @@ fn filename( state: &mut EditorState, command: Command )
     }
     Ok( () )
 }//}}}
+/// Execute a set of commands on lines matching pattern
+///
+/// TODO:
+/// * current address handling is a bit simplified for now
+/// * creating new operations object may be costly (?)
 fn global( state: &mut EditorState, command: Command )
         -> Result<(), RedError> {// {{{
     assert_eq!( 'g', command.operation );
     let ( _initial, _final ) = default_addrs( command.address_initial,
                                               command.address_final,
                                               1, state.buffer.num_lines() );
-    placeholder( state, command )
+    let mut commands: Vec<&str> = try!(parse_global_op(command.parameters));
+    let pattern: &str = commands.pop()
+            .expect("global: parser returned empty vector");
+    let operations = Operations::new();
+    for address in _initial .. _final + 1 {
+        if state.buffer.does_match( pattern, address ) {
+            for cmd in &commands {
+                let mut _command: Command;
+                if cmd.trim().is_empty() {
+                    _command = Command {
+                                    address_initial: address,
+                                    address_final: address,
+                                    operation: 'p',
+                                    parameters: "",
+                                };
+                } else {
+                    _command = try!( parse_command( cmd, state ));
+                    _command.address_initial = address;
+                    _command.address_final   = address;
+                }
+                try!( operations.execute( state, _command ));
+                state.buffer.set_current_address( address );
+            }
+        }
+    }
+    Ok( () )
 }//}}}
 fn global_interactive( state: &mut EditorState,//{{{
                        command: Command ) -> Result<(), RedError> {

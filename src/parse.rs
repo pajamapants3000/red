@@ -400,63 +400,7 @@ pub fn sub_captures( original: &str, captures: Captures )// {{{
 /// Trims white space on the left as well - does not count these characters
 ///
 /// # Examples
-///
-/// All examples repeated in tests module below
-///
-/// No address given
-/// ```rust
-/// let _in: &str = "e myfile.txt";
-/// assert_eq!( get_opchar_index( _in ), 0 );
-/// ```
-///
-/// No address given, with spaces
-/// ```rust
-/// let _in: &str = "       e myfile.txt";
-/// assert_eq!( get_opchar_index( _in ), 0 );
-/// ```
-///
-/// No address given, with spaces and tabs
-/// ```rust
-/// let _in: &str = "  		  	e myfile.txt";
-/// assert_eq!( get_opchar_index( _in ), 0 );
-/// ```
-///
-/// Most basic address value types
-/// ```rust
-/// let _in: &str = ".a";
-/// assert_eq!( get_opchar_index( _in ), 1 );
-/// ```
-///
-/// ```rust
-/// let _in: &str = ".,.p";
-/// assert_eq!( get_opchar_index( _in ), 3 ); // test
-/// ```
-///
-/// Slightly more complicated
-/// ```rust
-/// let _in: &str = ".-2,.+2p";
-/// assert_eq!( get_opchar_index( _in ), 3 ); //test
-/// ```
-///
-/// Regular expression match line search forward
-/// ```rust
-/// let _in: &str = "/^Beginning with.*$/;/.* at the end$/s_mytest_yourtest_g";
-/// assert_eq!( get_opchar_index( _in ), 37 );
-/// ```
-///
-/// Regular expression match line search forward with spaces and tabs
-/// ```rust
-/// let _in: &str =
-/// "		  	/^Beginning with.*$/;/.* at the end$/s_mytest_yourtest_g";
-/// assert_eq!( get_opchar_index( _in ), 37 );
-/// ```
-///
-/// Regular expression match line search backward
-/// ```rust
-/// let _in: &str = "?^Beginning with.*$?,?.* at the end$?s_mytest_yourtest_g";
-/// assert_eq!( get_opchar_index( _in ), 37 );
-/// ```
-///
+/// See tests in tests module below
 fn get_opchar_index( _cmd_input: &str ) -> Result<(usize, char), RedError> {
     let mut current_indx: usize = 0;
     let mut bytes_iter: Bytes = _cmd_input.trim().bytes();
@@ -544,6 +488,39 @@ fn is_in_regex( text: &str, indx: usize ) -> bool {// {{{
     } else {
         true
     }
+}// }}}
+// }}}
+/// Parse parameter for g, G, v, V operations// {{{
+///
+/// Confirms that a properly formatted regex leads
+/// a set of commands, one on each line; possibly one
+/// on the same line as the regex.
+/// Returns Result::Err( RedError::ParameterSyntax ) if
+/// no regex is found;
+/// Otherwise, returns Vec, LAST item is the regex
+/// (so it can be easily popped off), remaining items
+/// are the commands.
+///
+/// # Panics
+/// * unable to compile regular expression pattern
+/// from ADDR_REGEX_FWDSEARCH - should never happen
+/// * Finds match but somehow there is no capture
+pub fn parse_global_op<'a>( g_op: &'a str )// {{{
+        -> Result<Vec<&'a str>, RedError> {
+    let re_pattern: Regex = Regex::new( ADDR_REGEX_FWDSEARCH ).unwrap();
+    let pattern: &'a str = match &re_pattern.captures( g_op ) {
+        &Some(ref s) => s.at(1)
+            .expect("already confirmed match; capture expected"),
+        &None => return Err( RedError::ParameterSyntax{ parameter:
+            "parse_global_op: ".to_string() + g_op }),
+    };
+    let (_, right) = re_pattern.find( g_op )
+        .expect("parse_global_op: already proved match, now not matching");
+    let commands: &'a str = &g_op[right ..];
+    let mut cmd_collection: Vec<&'a str> = commands.lines().collect();
+    println!("cmd: {:?}", cmd_collection);
+    cmd_collection.push( &pattern );
+    Ok( cmd_collection )
 }// }}}
 // }}}
 // ^^^ Functions ^^^ }}}

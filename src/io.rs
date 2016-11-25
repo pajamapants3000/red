@@ -107,7 +107,11 @@ pub fn get_input( mut input_buffer: String, state: &EditorState )
 
     loop {
         match input_buffer.pop() {
-            Some(x) => assert_eq!( x, '\\' ),
+            Some(x) => {
+                assert_eq!( x, '\\' );
+        // we want to be able to distinguish separate lines for global commands
+                input_buffer.push( '\n' );
+            },
             None => {},
         }
 
@@ -125,6 +129,7 @@ pub fn get_input( mut input_buffer: String, state: &EditorState )
         if !RE.is_match( &mut input_buffer ) {
             break;
         }
+
         prompt = PROMPT_CONTINUE;
     }
     Ok( input_buffer )

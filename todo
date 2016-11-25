@@ -1,6 +1,3 @@
-* allow whitespace inside address expression
-    - currently a WIP
-    - also adding/improving tests
 * undo
 * global (+int, rev)
 * // and ?? repeat last search

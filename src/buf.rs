@@ -276,6 +276,7 @@ impl Buffer {   //{{{
     }// }}}
 // }}}
     /// Return reference to working file name string// {{{
+    #[cfg(test)]
     pub fn get_file_path( &self ) -> Option<&OsStr> {// {{{
         match &self.file {
             &Some( ref file_path ) => Some( file_path ),
@@ -284,6 +285,7 @@ impl Buffer {   //{{{
     }// }}}
 // }}}
     /// Set new working file name; remove file at old name// {{{
+    #[cfg(test)]
     pub fn move_file( &mut self, path: &str )
             -> Result<(), RedError> {// {{{
         match &self.file {
@@ -523,6 +525,14 @@ impl Buffer {   //{{{
         }
         Ok( () )
 
+    }// }}}
+// }}}
+    /// Pattern match predicate // {{{
+    ///
+    /// Returns true if line has pattern match, false otherwise
+    pub fn does_match( &self, regex: &str, address: usize ) -> bool {// {{{
+        let re = Regex::new( regex ).unwrap();
+        re.is_match( self.get_line_content( address ).unwrap_or("") )
     }// }}}
 // }}}
     /// Return number of next matching line// {{{
