@@ -17,6 +17,7 @@ use ::regex::{Regex, Captures};
 use error::*;
 use io::*;
 use buf::*;
+use ops::Operations;
 use ::{EditorState, EditorMode};
 
 // ^^^ Bring in to namespace ^^^ }}}
@@ -36,11 +37,13 @@ const SUB_REGEX_BACKREF:    &'static str = r#"\\([0-9])"#;
 
 // ^^^ Constants ^^^ }}}
 // *** Data Structures *** {{{
-pub struct Command<'a> {// {{{
+pub struct Command<'a, 'b> {// {{{
     pub address_initial: usize,
     pub address_final: usize,
     pub operation: char,
     pub parameters: &'a str,
+    // constant struct that command will carry around with it
+    pub operations: &'b Operations,
 }// }}}
 pub struct Substitution {// {{{
     pub to_match: String,
@@ -88,8 +91,8 @@ pub fn parse_invocation( invoc_input: Vec<String>, state: &mut EditorState ) {//
 ///
 /// This is the public interface to the parse module
 ///
-pub fn parse_command<'a>( _cmd_input: &'a str, state: &EditorState )//{{{
-        -> Result<Command<'a>, RedError> {
+pub fn parse_command<'a,'b>( _cmd_input: &'a str, state: &EditorState,//{{{
+        _operations: &'b Operations ) -> Result<Command<'a, 'b>, RedError> {
     // MUST initialize?
     let mut _address_initial: usize = 1;
     let mut _address_final: usize = 1;
@@ -124,6 +127,7 @@ pub fn parse_command<'a>( _cmd_input: &'a str, state: &EditorState )//{{{
                     address_final: _address_final,
                     operation: _operation,
                     parameters: _parameters,
+                    operations: _operations,
                 }
             )
         }

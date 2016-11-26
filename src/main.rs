@@ -48,7 +48,6 @@ const DEFAULT_PROMPT: &'static str = "%";
 /// Contain state values for the program during execution
 ///
 /// TODO: include buffer and command structures?
-#[derive(Clone)]
 pub struct EditorState {
     mode: EditorMode,
     help: bool,
@@ -67,21 +66,22 @@ pub enum EditorMode {
 // *** Functions *** {{{
 fn main() {// {{{
     // initialize buffer
-    let buffer = Buffer::new( BufferInput::None )
+    let _buffer = Buffer::new( BufferInput::None )
         .expect( "main: failed to create initial empty buffer" );
+    // Construct operations hashmap
+    let operations: Operations = Operations::new();
     // initialize editor state
     let mut state = EditorState { mode: DEFAULT_MODE, help: DEFAULT_HELP,
             messages: DEFAULT_MESSAGES, prompt: DEFAULT_PROMPT.to_string(),
-            buffer: buffer, source: String::new() };
-    // Construct operations hashmap
-    let operations = Operations::new();
+            buffer: _buffer, source: String::new() };
     // Collect invocation arguments
     let args: Vec<String> = env::args().collect();
     parse_invocation( args, &mut state );
     if state.source.len() > 0 {
         // generate and execute edit operation for requested file or command
         let command = Command{ address_initial: 0, address_final: 0,
-                operation: 'e', parameters: &state.source.clone() };
+                operation: 'e', parameters: &state.source.clone(),
+                operations: &operations };
         operations.execute( &mut state, command )
             .expect( "main: failed to initialize buffer" );
     } else {
@@ -108,7 +108,7 @@ fn main() {// {{{
                     continue;   // set default command, e.g. print cur addr?
                 }
                 let command: Command;
-                match parse_command( &input, &state ) {
+                match parse_command( &input, &state, &operations ) {
                     Ok(x) => {
                         command = x;
                     }

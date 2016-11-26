@@ -29,10 +29,11 @@ use error::*;
 use parse::*;
 use io::get_input;
 use ::{EditorState, EditorMode, print_help, print_msg, term_size};
+use self::NotableLine::*;
 // ^^^ Bring in to namespace ^^^ }}}
 
 // *** Attributes *** {{{
-const NUM_OPERATIONS: usize = 26;
+const NUM_OPERATIONS: usize = 27;
 const COMMAND_PREFIX: &'static str = "@";
 // ^^^ Attributes ^^^ }}}
 
@@ -40,43 +41,208 @@ const COMMAND_PREFIX: &'static str = "@";
 // ^^^ Constants ^^^ }}}
 
 // *** Data Structures *** {{{
+enum NotableLine {
+    FirstLine,
+    LastLine,
+    CurrentLine,
+    CurrentPlusOneLine,
+    LineNotApplicable
+}
 pub struct Operations {
-    operation_map: HashMap<char, Box<Fn( &mut EditorState, Command )
-            -> Result<(), RedError>> >,
+    operation_map: HashMap<char, OpData>,
+}
+struct OpData {
+    function: Box<Fn( &mut EditorState, Command ) -> Result<(), RedError>>,
+    default_initial_address: NotableLine,
+    default_final_address: NotableLine,
 }
 impl Operations {// {{{
     /// Creates Operations HashMap// {{{
     pub fn new() -> Operations {// {{{
-        let mut _operation_map: HashMap<char,
-                Box<Fn( &mut EditorState, Command ) -> Result<(), RedError>> >=
+        let mut _operation_map: HashMap<char, OpData> =
             HashMap::with_capacity( NUM_OPERATIONS );
-        _operation_map.insert( 'a', Box::new(append) );
-        _operation_map.insert( 'c', Box::new(change) );
-        _operation_map.insert( 'd', Box::new(delete) );
-        _operation_map.insert( 'e', Box::new(edit) );
-        _operation_map.insert( 'E', Box::new(edit_unsafe) );
-        _operation_map.insert( 'f', Box::new(filename) );
-        _operation_map.insert( 'g', Box::new(global) );
-        _operation_map.insert( 'G', Box::new(global_interactive) );
-        _operation_map.insert( 'h', Box::new(help_recall) );
-        _operation_map.insert( 'H', Box::new(help_tgl) );
-        _operation_map.insert( 'i', Box::new(insert) );
-        _operation_map.insert( 'j', Box::new(join) );
-        _operation_map.insert( 'k', Box::new(mark) );
-        _operation_map.insert( 'l', Box::new(lines_list) );
-        _operation_map.insert( 'm', Box::new(move_lines) );
-        _operation_map.insert( 'n', Box::new(print_numbered) );
-        _operation_map.insert( 'p', Box::new(print) );
-        _operation_map.insert( 'q', Box::new(quit) );
-        _operation_map.insert( 'r', Box::new(read) );
-        _operation_map.insert( 's', Box::new(substitute) );
-        _operation_map.insert( 't', Box::new(transfer) );
-        _operation_map.insert( 'u', Box::new(undo) );
-        _operation_map.insert( 'v', Box::new(global_inverse)  );
-        _operation_map.insert( 'V', Box::new(global_inverse_interactive) );
-        _operation_map.insert( 'w', Box::new(write_to_disk) );
-        _operation_map.insert( 'W', Box::new(append_to_disk) );
-
+        // Insert operations and data   //{{{
+        _operation_map.insert( 'a',// {{{
+                                OpData{ function: Box::new(append),
+                                        default_initial_address: CurrentLine,
+                                        default_final_address: CurrentLine,
+                                }
+        );// }}}
+        _operation_map.insert( 'c',// {{{
+                                OpData{ function: Box::new(change),
+                                        default_initial_address: CurrentLine,
+                                        default_final_address: CurrentLine,
+                                }
+        );// }}}
+        _operation_map.insert( 'd',// {{{
+                                OpData{ function: Box::new(delete),
+                                        default_initial_address: CurrentLine,
+                                        default_final_address: CurrentLine,
+                                }
+        );// }}}
+        _operation_map.insert( 'e',// {{{
+                                OpData{ function: Box::new(edit),
+                                        default_initial_address:
+                                            LineNotApplicable,
+                                        default_final_address:
+                                            LineNotApplicable,
+                                }
+        );// }}}
+        _operation_map.insert( 'E',// {{{
+                                OpData{ function: Box::new(edit_unsafe),
+                                        default_initial_address:
+                                            LineNotApplicable,
+                                        default_final_address:
+                                            LineNotApplicable,
+                                }
+        );// }}}
+        _operation_map.insert( 'f',// {{{
+                                OpData{ function: Box::new(filename),
+                                        default_initial_address:
+                                            LineNotApplicable,
+                                        default_final_address:
+                                            LineNotApplicable,
+                                }
+        );// }}}
+        _operation_map.insert( 'g',// {{{
+                                OpData{ function: Box::new(global),
+                                        default_initial_address: FirstLine,
+                                        default_final_address: LastLine,
+                                }
+        );// }}}
+        _operation_map.insert( 'G',// {{{
+                                OpData{ function: Box::new(global_interactive),
+                                        default_initial_address: FirstLine,
+                                        default_final_address: LastLine,
+                                }
+        );// }}}
+        _operation_map.insert( 'h',// {{{
+                                OpData{ function: Box::new(help_recall),
+                                        default_initial_address:
+                                            LineNotApplicable,
+                                        default_final_address:
+                                            LineNotApplicable,
+                                }
+        );// }}}
+        _operation_map.insert( 'H',// {{{
+                                OpData{ function: Box::new(help_tgl),
+                                        default_initial_address:
+                                            LineNotApplicable,
+                                        default_final_address:
+                                            LineNotApplicable,
+                                }
+        );// }}}
+        _operation_map.insert( 'i',// {{{
+                                OpData{ function: Box::new(insert),
+                                        default_initial_address: CurrentLine,
+                                        default_final_address: CurrentLine,
+                                }
+        );// }}}
+        _operation_map.insert( 'j',// {{{
+                                OpData{ function: Box::new(join),
+                                        default_initial_address: CurrentLine,
+                                        default_final_address:
+                                            CurrentPlusOneLine,
+                                }
+        );// }}}
+        _operation_map.insert( 'k',// {{{
+                                OpData{ function: Box::new(mark),
+                                        default_initial_address: CurrentLine,
+                                        default_final_address: CurrentLine,
+                                }
+        );// }}}
+        _operation_map.insert( 'l',// {{{
+                                OpData{ function: Box::new(lines_list),
+                                        default_initial_address: CurrentLine,
+                                        default_final_address: CurrentLine,
+                                }
+        );// }}}
+        _operation_map.insert( 'm',// {{{
+                                OpData{ function: Box::new(move_lines),
+                                        default_initial_address: CurrentLine,
+                                        default_final_address: CurrentLine,
+                                }
+        );// }}}
+        _operation_map.insert( 'n',// {{{
+                                OpData{ function: Box::new(print_numbered),
+                                        default_initial_address: CurrentLine,
+                                        default_final_address: CurrentLine,
+                                }
+        );// }}}
+        _operation_map.insert( 'p',// {{{
+                                OpData{ function: Box::new(print),
+                                        default_initial_address: CurrentLine,
+                                        default_final_address: CurrentLine,
+                                }
+        );// }}}
+        _operation_map.insert( 'P',// {{{
+                                OpData{ function: Box::new(prompt),
+                                        default_initial_address:
+                                            LineNotApplicable,
+                                        default_final_address:
+                                            LineNotApplicable,
+                                }
+        );// }}}
+        _operation_map.insert( 'q',// {{{
+                                OpData{ function: Box::new(quit),
+                                        default_initial_address:
+                                            LineNotApplicable,
+                                        default_final_address:
+                                            LineNotApplicable,
+                                }
+        );// }}}
+        _operation_map.insert( 'r',// {{{
+                                OpData{ function: Box::new(read),
+                                        default_initial_address: LastLine,
+                                        default_final_address: LastLine,
+                                }
+        );// }}}
+        _operation_map.insert( 's',// {{{
+                                OpData{ function: Box::new(substitute),
+                                        default_initial_address: CurrentLine,
+                                        default_final_address: CurrentLine,
+                                }
+        );// }}}
+        _operation_map.insert( 't',// {{{
+                                OpData{ function: Box::new(transfer),
+                                        default_initial_address: CurrentLine,
+                                        default_final_address: CurrentLine,
+                                }
+        );// }}}
+        _operation_map.insert( 'u',// {{{
+                                OpData{ function: Box::new(undo),
+                                        default_initial_address:
+                                            LineNotApplicable,
+                                        default_final_address:
+                                            LineNotApplicable,
+                                }
+        );// }}}
+        _operation_map.insert( 'v',// {{{
+                                OpData{ function: Box::new(global_inverse),
+                                        default_initial_address: FirstLine,
+                                        default_final_address: LastLine,
+                                }
+        );// }}}
+        _operation_map.insert( 'V',// {{{
+                                OpData{ function:
+                                    Box::new(global_inverse_interactive),
+                                        default_initial_address: FirstLine,
+                                        default_final_address: LastLine,
+                                }
+        );// }}}
+        _operation_map.insert( 'w',// {{{
+                                OpData{ function: Box::new(write_to_disk),
+                                        default_initial_address: FirstLine,
+                                        default_final_address: LastLine,
+                                }
+        );// }}}
+        _operation_map.insert( 'W',// {{{
+                                OpData{ function: Box::new(append_to_disk),
+                                        default_initial_address: FirstLine,
+                                        default_final_address: LastLine,
+                                }
+        );// }}}
+        //}}}
         Operations { operation_map: _operation_map }
     }// }}}
 // }}}
@@ -85,8 +251,8 @@ impl Operations {// {{{
             -> Result<(), RedError> {
         match self.operation_map.contains_key( &command.operation ) {
             true => {
-                let op_to_execute = self.operation_map
-                    .get( &command.operation ).unwrap();
+                let ref op_to_execute = self.operation_map
+                    .get( &command.operation ).unwrap().function;
                 op_to_execute( state, command )
             },
             false => {
@@ -94,7 +260,31 @@ impl Operations {// {{{
             },
         }
     }// }}}
-// }}}
+    // }}}
+    /// Execute list of commands at address// {{{
+    fn execute_list( &self, state: &mut EditorState,// {{{
+                commands: &str, address: usize ) -> Result<(), RedError> {
+        for cmd in commands.lines() {
+            let mut _command: Command;
+            if cmd.trim().is_empty() {
+                _command = Command {
+                                address_initial: address,
+                                address_final: address,
+                                operation: 'p',
+                                parameters: "",
+                                operations: &self,
+                            };
+            } else {
+                _command = try!( parse_command( cmd, state, &self ));
+                _command.address_initial = address;
+                _command.address_final   = address;
+            }
+            try!( self.execute( state, _command ));
+            state.buffer.set_current_address( address );
+        }
+        Ok( () )
+    }// }}}
+    // }}}
 }// }}}
 // ^^^ Data Structures ^^^ }}}
 
@@ -131,11 +321,7 @@ fn placeholder( state: &mut EditorState, command: Command)//{{{
 fn append( state: &mut EditorState, command: Command )
         -> Result<(), RedError> {// {{{
     assert_eq!( 'a', command.operation );
-    let ( _initial, _final ) = default_addrs( command.address_initial,
-                                              command.address_final,
-                                          state.buffer.get_current_address(),
-                                          state.buffer.get_current_address(),
-                                            );
+    let ( _initial, _final ) = default_addrs( state, &command );
     state.buffer.set_current_address( _final );
     state.mode = EditorMode::Insert;
     Ok( () )
@@ -144,15 +330,13 @@ fn append( state: &mut EditorState, command: Command )
 fn change( state: &mut EditorState, command: Command )
         -> Result<(), RedError> {// {{{
     assert_eq!( 'c', command.operation );
-    let ( _initial, _final ) = default_addrs( command.address_initial,
-                                              command.address_final,
-                                          state.buffer.get_current_address(),
-                                          state.buffer.get_current_address(),
-                                            );
+    let ( _initial, _final ) = default_addrs( state, &command );
     let delete_command = Command{ address_initial: _initial,
-            address_final: _final, operation: 'd', parameters: ""  };
+            address_final: _final, operation: 'd', parameters: "",
+            operations: command.operations };
     let insert_command = Command{ address_initial: _initial,
-            address_final: _initial, operation: 'i', parameters: ""  };
+            address_final: _initial, operation: 'i', parameters: "",
+            operations: command.operations };
     try!( delete( state, delete_command ) );
     insert( state, insert_command )
 }//}}}
@@ -160,11 +344,7 @@ fn change( state: &mut EditorState, command: Command )
 fn delete( state: &mut EditorState, command: Command )
         -> Result<(), RedError> {// {{{
     assert_eq!( 'd', command.operation );
-    let ( _initial, _final ) = default_addrs( command.address_initial,
-                                              command.address_final,
-                                          state.buffer.get_current_address(),
-                                          state.buffer.get_current_address(),
-                                            );
+    let ( _initial, _final ) = default_addrs( state, &command );
     for _ in _initial .. ( _final + 1 ) {
         // NOTE: lines move as you delete them - don't increment!
         try!( state.buffer.delete_line( _initial ) );
@@ -177,8 +357,8 @@ fn edit( state: &mut EditorState, command: Command )
     assert_eq!( 'e', command.operation );
     let _ = try!( state.buffer.on_close() );
     edit_unsafe( state, Command{ address_initial: command.address_initial,
-        address_final: command.address_final,
-        operation: 'E', parameters: command.parameters })
+        address_final: command.address_final, operation: 'E',
+        parameters: command.parameters, operations: command.operations, })
 }//}}}
 fn edit_unsafe( state: &mut EditorState, command: Command )
         -> Result<(), RedError> {// {{{
@@ -237,13 +417,11 @@ fn filename( state: &mut EditorState, command: Command )
 fn global( state: &mut EditorState, command: Command )
         -> Result<(), RedError> {// {{{
     assert_eq!( 'g', command.operation );
-    let ( _initial, _final ) = default_addrs( command.address_initial,
-                                              command.address_final,
-                                              1, state.buffer.num_lines() );
+    let ( _initial, _final ) = default_addrs( state, &command );
     let ( pattern, commands ) = try!(parse_global_op(command.parameters));
     for address in _initial .. _final + 1 {
         if state.buffer.does_match( pattern, address ) {
-            try!( execute_list( state, commands, address ));
+            try!( command.operations.execute_list( state, commands, address ));
         }
     }
     Ok( () )
@@ -251,9 +429,7 @@ fn global( state: &mut EditorState, command: Command )
 fn global_interactive( state: &mut EditorState,//{{{
                        command: Command ) -> Result<(), RedError> {
     assert_eq!( 'G', command.operation );
-    let ( _initial, _final ) = default_addrs( command.address_initial,
-                                              command.address_final,
-                                              1, state.buffer.num_lines() );
+    let ( _initial, _final ) = default_addrs( state, &command );
     let mut input: String = String::new();
     let mut last_input: String = String::new();
     let ( pattern, commands ) = try!(parse_global_op(command.parameters));
@@ -272,13 +448,14 @@ fn global_interactive( state: &mut EditorState,//{{{
                                     address_initial: address,
                                     address_final: address,
                                     operation: 'n',
+                                    operations: command.operations,
                                     parameters: "" }).expect(
                     "global_interactive: line matching regex doesn't exist!" );
             input = try!( get_input( input, state ));
             if input.trim() == "&" {
                 input = last_input;
             }
-            try!( execute_list( state, &input, address ));
+            try!( command.operations.execute_list( state, &input, address ));
             last_input = input;
             input = String::new();
         }
@@ -286,31 +463,6 @@ fn global_interactive( state: &mut EditorState,//{{{
     state.prompt = prompt_save;
     Ok( () )
 }//}}}
-/// Execute list of commands at address// {{{
-fn execute_list( state: &mut EditorState, commands: &str, address: usize )// {{{
-        -> Result<(), RedError> {
-    // Construct operations hashmap
-    let operations = Operations::new();
-    for cmd in commands.lines() {
-        let mut _command: Command;
-        if cmd.trim().is_empty() {
-            _command = Command {
-                            address_initial: address,
-                            address_final: address,
-                            operation: 'p',
-                            parameters: "",
-                        };
-        } else {
-            _command = try!( parse_command( cmd, state ));
-            _command.address_initial = address;
-            _command.address_final   = address;
-        }
-        try!( operations.execute( state, _command ));
-        state.buffer.set_current_address( address );
-    }
-    Ok( () )
-}// }}}
-// }}}
 fn help_recall( state: &mut EditorState, command: Command )
         -> Result<(), RedError> {// {{{
     assert_eq!( 'h', command.operation );
@@ -328,11 +480,7 @@ fn help_tgl( state: &mut EditorState, command: Command )
 fn insert( state: &mut EditorState, command: Command )
         -> Result<(), RedError> {// {{{
     assert_eq!( 'i', command.operation );
-    let ( _initial, _final ) = default_addrs( command.address_initial,
-                                              command.address_final,
-                                          state.buffer.get_current_address(),
-                                          state.buffer.get_current_address(),
-                                            );
+    let ( _initial, _final ) = default_addrs( state, &command );
     state.buffer.set_current_address( _final - 1 );
     state.mode = EditorMode::Insert;
     Ok( () )
@@ -340,22 +488,14 @@ fn insert( state: &mut EditorState, command: Command )
 fn join( state: &mut EditorState, command: Command )
         -> Result<(), RedError> {// {{{
     assert_eq!( 'j', command.operation );
-    let ( _initial, _final ) = default_addrs( command.address_initial,
-                                              command.address_final,
-                                      state.buffer.get_current_address(),
-                                      state.buffer.get_current_address() + 1,
-                                            );
+    let ( _initial, _final ) = default_addrs( state, &command );
     try!( state.buffer.join_lines( _initial, _final ));
     Ok( () )
 }//}}}
 fn mark( state: &mut EditorState, command: Command )
         -> Result<(), RedError> {// {{{
     assert_eq!( 'k', command.operation );
-    let ( _initial, _final ) = default_addrs( command.address_initial,
-                                              command.address_final,
-                                          state.buffer.get_current_address(),
-                                          state.buffer.get_current_address(),
-                                            );
+    let ( _initial, _final ) = default_addrs( state, &command );
     // make sure we have been provided a single character for the mark
     let param_len = command.parameters.len();
     if param_len > 1 || param_len == 0 {
@@ -389,11 +529,7 @@ fn mark( state: &mut EditorState, command: Command )
 fn lines_list( state: &mut EditorState, command: Command )
         -> Result<(), RedError> {// {{{
     assert_eq!( 'l', command.operation );
-    let ( _initial, _final ) = default_addrs( command.address_initial,
-                                              command.address_final,
-                                          state.buffer.get_current_address(),
-                                          state.buffer.get_current_address(),
-                                            );
+    let ( _initial, _final ) = default_addrs( state, &command );
     let stdout = stdout();
     let handle = stdout.lock();
     let mut writer = BufWriter::new( handle );
@@ -451,11 +587,7 @@ fn move_lines( state: &mut EditorState, command: Command )
         -> Result<(), RedError> {// {{{
     assert_eq!( 'm', command.operation );
     let mut destination: usize;
-    let ( _initial, _final ) = default_addrs( command.address_initial,
-                                              command.address_final,
-                                          state.buffer.get_current_address(),
-                                          state.buffer.get_current_address(),
-                                            );
+    let ( _initial, _final ) = default_addrs( state, &command );
     if command.parameters == "0" {
         destination = 0;
     } else {
@@ -473,11 +605,7 @@ fn move_lines( state: &mut EditorState, command: Command )
 fn print_numbered( state: &mut EditorState,//{{{
                    command: Command ) -> Result<(), RedError> {
     assert_eq!( 'n', command.operation );
-    let ( _initial, _final ) = default_addrs( command.address_initial,
-                                              command.address_final,
-                                          state.buffer.get_current_address(),
-                                          state.buffer.get_current_address(),
-                                                );
+    let ( _initial, _final ) = default_addrs( state, &command );
     let num_lines_f: f64 = state.buffer.num_lines() as f64 + 1.0_f64;
     let _width = num_lines_f.log10().ceil() as usize;
     for ( _num, _line ) in state.buffer.lines_iterator().enumerate()
@@ -505,11 +633,7 @@ fn print_numbered( state: &mut EditorState,//{{{
 fn print( state: &mut EditorState, command: Command )//{{{
             -> Result<(), RedError> {
     assert_eq!( 'p', command.operation );
-    let ( _initial, _final ) = default_addrs( command.address_initial,
-                                              command.address_final,
-                                          state.buffer.get_current_address(),
-                                          state.buffer.get_current_address(),
-                                                );
+    let ( _initial, _final ) = default_addrs( state, &command );
     for indx in _initial .. ( _final + 1 ) {
         println!("{}", state.buffer.get_line_content( indx ).expect(
                 "ops::print: called get_line_content on out-of-range line" ) );
@@ -518,6 +642,13 @@ fn print( state: &mut EditorState, command: Command )//{{{
     // TODO: Drop this? Or Keep to avoid unused warnings?
     state.mode = EditorMode::Command;
     Ok( () )
+}// }}}
+// }}}
+/// Toggles (sets?) commant prompt
+fn prompt( state: &mut EditorState, command: Command )//{{{
+            -> Result<(), RedError> {
+    assert_eq!( 'p', command.operation );
+    placeholder( state, command )
 }// }}}
 // }}}
 /// Exit program// {{{
@@ -537,19 +668,13 @@ fn quit( state: &mut EditorState, command: Command )//{{{
 fn read( state: &mut EditorState, command: Command )
         -> Result<(), RedError> {// {{{
     assert_eq!( 'r', command.operation );
-    let ( _initial, _final ) = default_addrs( command.address_initial,
-                                              command.address_final,
-                                              1, state.buffer.num_lines() );
+    let ( _initial, _final ) = default_addrs( state, &command );
     placeholder( state, command )
 }//}}}
 fn substitute( state: &mut EditorState, command: Command )
         -> Result<(), RedError> {// {{{
     assert_eq!( 's', command.operation );
-    let ( _initial, _final ) = default_addrs( command.address_initial,
-                                              command.address_final,
-                                          state.buffer.get_current_address(),
-                                          state.buffer.get_current_address(),
-                                            );
+    let ( _initial, _final ) = default_addrs( state, &command );
     let sub_parms: Substitution = try!( parse_substitution_parameter(
             command.parameters ));
     state.buffer.substitute( &sub_parms.to_match, &sub_parms.to_sub,
@@ -560,11 +685,7 @@ fn transfer( state: &mut EditorState, command: Command )
         -> Result<(), RedError> {// {{{
     assert_eq!( 't', command.operation );
     let destination: usize;
-    let ( _initial, _final ) = default_addrs( command.address_initial,
-                                              command.address_final,
-                                          state.buffer.get_current_address(),
-                                          state.buffer.get_current_address(),
-                                            );
+    let ( _initial, _final ) = default_addrs( state, &command );
     if command.parameters == "0" {
         destination = 0;
     } else {
@@ -582,13 +703,11 @@ fn undo( state: &mut EditorState, command: Command )
 fn global_inverse( state: &mut EditorState,//{{{
                    command: Command ) -> Result<(), RedError> {
     assert_eq!( 'v', command.operation );
-    let ( _initial, _final ) = default_addrs( command.address_initial,
-                                              command.address_final,
-                                              1, state.buffer.num_lines() );
+    let ( _initial, _final ) = default_addrs( state, &command );
     let ( pattern, commands ) = try!(parse_global_op(command.parameters));
     for address in _initial .. _final + 1 {
         if !state.buffer.does_match( pattern, address ) {
-            try!( execute_list( state, commands, address ));
+            try!( command.operations.execute_list( state, commands, address ));
         }
     }
     Ok( () )
@@ -596,9 +715,7 @@ fn global_inverse( state: &mut EditorState,//{{{
 fn global_inverse_interactive( state: &mut EditorState,//{{{
                                command: Command ) -> Result<(), RedError> {
     assert_eq!( 'V', command.operation );
-    let ( _initial, _final ) = default_addrs( command.address_initial,
-                                              command.address_final,
-                                              1, state.buffer.num_lines() );
+    let ( _initial, _final ) = default_addrs( state, &command );
     let mut input: String = String::new();
     let mut last_input: String = String::new();
     let ( pattern, commands ) = try!(parse_global_op(command.parameters));
@@ -617,13 +734,14 @@ fn global_inverse_interactive( state: &mut EditorState,//{{{
                                     address_initial: address,
                                     address_final: address,
                                     operation: 'n',
+                                    operations: command.operations,
                                     parameters: "" }).expect(
                     "global_interactive: line matching regex doesn't exist!" );
             input = try!( get_input( input, state ));
             if input.trim() == "&" {
                 input = last_input;
             }
-            try!( execute_list( state, &input, address ));
+            try!( command.operations.execute_list( state, &input, address ));
             last_input = input;
             input = String::new();
         }
@@ -637,9 +755,7 @@ fn write_to_disk( state: &mut EditorState,//{{{
     assert_eq!( 'w', command.operation );
     // TODO: Drop this? Or Keep to avoid unused warnings?
     state.mode = EditorMode::Command;
-    let ( _initial, _final ) = default_addrs( command.address_initial,
-                                              command.address_final,
-                                              1, state.buffer.num_lines() );
+    let ( _initial, _final ) = default_addrs( state, &command );
     state.buffer.write_to_disk( command.parameters, false, _initial, _final )
 }// }}}
 // }}}
@@ -648,9 +764,7 @@ fn append_to_disk( state: &mut EditorState,//{{{
     assert_eq!( 'W', command.operation );
     // TODO: Drop this? Or Keep to avoid unused warnings?
     state.mode = EditorMode::Command;
-    let ( _initial, _final ) = default_addrs( command.address_initial,
-                                              command.address_final,
-                                              1, state.buffer.num_lines() );
+    let ( _initial, _final ) = default_addrs( state, &command );
     state.buffer.write_to_disk( command.parameters, true, _initial, _final )
 }//}}}
 
@@ -659,16 +773,31 @@ fn append_to_disk( state: &mut EditorState,//{{{
 /// Defaults are used if both original integers are 0;
 /// Also fixes lower address to be 1 instead of zero if an otherwise
 /// suitable range is provided;
-fn default_addrs( _initial: usize, _final: usize,
-                  default_i: usize, default_f: usize ) -> ( usize, usize ) {
-    if _initial == 0 {
-        if _final == 0 {
+fn default_addrs( state: &EditorState, command: &Command ) -> (usize, usize) {
+    let default_i = match command.operations.operation_map
+                .get( &command.operation ).unwrap().default_initial_address {
+        FirstLine => 1,
+        LastLine => state.buffer.num_lines(),
+        CurrentLine => state.buffer.get_current_address(),
+        CurrentPlusOneLine => state.buffer.get_current_address() + 1,
+        LineNotApplicable => 1,
+    };
+    let default_f = match command.operations.operation_map
+                .get( &command.operation ).unwrap().default_final_address {
+        FirstLine => 1,
+        LastLine => state.buffer.num_lines(),
+        CurrentLine => state.buffer.get_current_address(),
+        CurrentPlusOneLine => state.buffer.get_current_address() + 1,
+        LineNotApplicable => 1,
+    };
+    if command.address_initial == 0 {
+        if command.address_final == 0 {
             ( default_i, default_f )
         } else {
-            ( 1, _final )
+            ( 1, command.address_final )
         }
     } else {
-        ( _initial, _final )
+        ( command.address_initial, command.address_final )
     }
 }
 
