@@ -27,6 +27,7 @@ use std::ffi::OsStr;
 use buf::*;
 use error::*;
 use parse::*;
+use io::get_input;
 use ::{EditorState, EditorMode, print_help, print_msg, term_size};
 // ^^^ Bring in to namespace ^^^ }}}
 
@@ -71,8 +72,8 @@ impl Operations {// {{{
         _operation_map.insert( 's', Box::new(substitute) );
         _operation_map.insert( 't', Box::new(transfer) );
         _operation_map.insert( 'u', Box::new(undo) );
-        _operation_map.insert( 'v', Box::new(global_reverse)  );
-        _operation_map.insert( 'V', Box::new(global_reverse_interactive) );
+        _operation_map.insert( 'v', Box::new(global_inverse)  );
+        _operation_map.insert( 'V', Box::new(global_inverse_interactive) );
         _operation_map.insert( 'w', Box::new(write_to_disk) );
         _operation_map.insert( 'W', Box::new(append_to_disk) );
 
@@ -239,29 +240,10 @@ fn global( state: &mut EditorState, command: Command )
     let ( _initial, _final ) = default_addrs( command.address_initial,
                                               command.address_final,
                                               1, state.buffer.num_lines() );
-    let mut commands: Vec<&str> = try!(parse_global_op(command.parameters));
-    let pattern: &str = commands.pop()
-            .expect("global: parser returned empty vector");
-    let operations = Operations::new();
+    let ( pattern, commands ) = try!(parse_global_op(command.parameters));
     for address in _initial .. _final + 1 {
         if state.buffer.does_match( pattern, address ) {
-            for cmd in &commands {
-                let mut _command: Command;
-                if cmd.trim().is_empty() {
-                    _command = Command {
-                                    address_initial: address,
-                                    address_final: address,
-                                    operation: 'p',
-                                    parameters: "",
-                                };
-                } else {
-                    _command = try!( parse_command( cmd, state ));
-                    _command.address_initial = address;
-                    _command.address_final   = address;
-                }
-                try!( operations.execute( state, _command ));
-                state.buffer.set_current_address( address );
-            }
+            try!( execute_list( state, commands, address ));
         }
     }
     Ok( () )
@@ -272,8 +254,63 @@ fn global_interactive( state: &mut EditorState,//{{{
     let ( _initial, _final ) = default_addrs( command.address_initial,
                                               command.address_final,
                                               1, state.buffer.num_lines() );
-    placeholder( state, command )
+    let mut input: String = String::new();
+    let mut last_input: String = String::new();
+    let ( pattern, commands ) = try!(parse_global_op(command.parameters));
+    // make sure no additional text after /re/
+    if !commands.is_empty() {
+        return Err( RedError::ParameterSyntax{
+            parameter: "global_interactive: ".to_string() +
+            command.parameters });
+    }
+    let prompt_save = state.prompt.clone();
+    state.prompt = "(G)%".to_string();
+    for address in _initial .. _final + 1 {
+        if state.buffer.does_match( pattern, address ) {
+            state.buffer.set_current_address( address );
+            print_numbered( state, Command{
+                                    address_initial: address,
+                                    address_final: address,
+                                    operation: 'n',
+                                    parameters: "" }).expect(
+                    "global_interactive: line matching regex doesn't exist!" );
+            input = try!( get_input( input, state ));
+            if input.trim() == "&" {
+                input = last_input;
+            }
+            try!( execute_list( state, &input, address ));
+            last_input = input;
+            input = String::new();
+        }
+    }
+    state.prompt = prompt_save;
+    Ok( () )
 }//}}}
+/// Execute list of commands at address// {{{
+fn execute_list( state: &mut EditorState, commands: &str, address: usize )// {{{
+        -> Result<(), RedError> {
+    // Construct operations hashmap
+    let operations = Operations::new();
+    for cmd in commands.lines() {
+        let mut _command: Command;
+        if cmd.trim().is_empty() {
+            _command = Command {
+                            address_initial: address,
+                            address_final: address,
+                            operation: 'p',
+                            parameters: "",
+                        };
+        } else {
+            _command = try!( parse_command( cmd, state ));
+            _command.address_initial = address;
+            _command.address_final   = address;
+        }
+        try!( operations.execute( state, _command ));
+        state.buffer.set_current_address( address );
+    }
+    Ok( () )
+}// }}}
+// }}}
 fn help_recall( state: &mut EditorState, command: Command )
         -> Result<(), RedError> {// {{{
     assert_eq!( 'h', command.operation );
@@ -542,21 +579,57 @@ fn undo( state: &mut EditorState, command: Command )
     assert_eq!( 'u', command.operation );
     placeholder( state, command )
 }//}}}
-fn global_reverse( state: &mut EditorState,//{{{
+fn global_inverse( state: &mut EditorState,//{{{
                    command: Command ) -> Result<(), RedError> {
     assert_eq!( 'v', command.operation );
     let ( _initial, _final ) = default_addrs( command.address_initial,
                                               command.address_final,
                                               1, state.buffer.num_lines() );
-    placeholder( state, command )
+    let ( pattern, commands ) = try!(parse_global_op(command.parameters));
+    for address in _initial .. _final + 1 {
+        if !state.buffer.does_match( pattern, address ) {
+            try!( execute_list( state, commands, address ));
+        }
+    }
+    Ok( () )
 }//}}}
-fn global_reverse_interactive( state: &mut EditorState,//{{{
+fn global_inverse_interactive( state: &mut EditorState,//{{{
                                command: Command ) -> Result<(), RedError> {
     assert_eq!( 'V', command.operation );
     let ( _initial, _final ) = default_addrs( command.address_initial,
                                               command.address_final,
                                               1, state.buffer.num_lines() );
-    placeholder( state, command )
+    let mut input: String = String::new();
+    let mut last_input: String = String::new();
+    let ( pattern, commands ) = try!(parse_global_op(command.parameters));
+    // make sure no additional text after /re/
+    if !commands.is_empty() {
+        return Err( RedError::ParameterSyntax{
+            parameter: "global_interactive: ".to_string() +
+            command.parameters });
+    }
+    let prompt_save = state.prompt.clone();
+    state.prompt = "(G)%".to_string();
+    for address in _initial .. _final + 1 {
+        if !state.buffer.does_match( pattern, address ) {
+            state.buffer.set_current_address( address );
+            print_numbered( state, Command{
+                                    address_initial: address,
+                                    address_final: address,
+                                    operation: 'n',
+                                    parameters: "" }).expect(
+                    "global_interactive: line matching regex doesn't exist!" );
+            input = try!( get_input( input, state ));
+            if input.trim() == "&" {
+                input = last_input;
+            }
+            try!( execute_list( state, &input, address ));
+            last_input = input;
+            input = String::new();
+        }
+    }
+    state.prompt = prompt_save;
+    Ok( () )
 }//}}}
 /// Write state.buffer to file// {{{
 fn write_to_disk( state: &mut EditorState,//{{{

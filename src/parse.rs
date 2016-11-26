@@ -490,23 +490,20 @@ fn is_in_regex( text: &str, indx: usize ) -> bool {// {{{
     }
 }// }}}
 // }}}
-/// Parse parameter for g, G, v, V operations// {{{
+/// Parse parameter for g, v operations// {{{
 ///
 /// Confirms that a properly formatted regex leads
 /// a set of commands, one on each line; possibly one
 /// on the same line as the regex.
 /// Returns Result::Err( RedError::ParameterSyntax ) if
 /// no regex is found;
-/// Otherwise, returns Vec, LAST item is the regex
-/// (so it can be easily popped off), remaining items
-/// are the commands.
-///
+/// Otherwise, returns tuple - pattern, list of commands
 /// # Panics
 /// * unable to compile regular expression pattern
 /// from ADDR_REGEX_FWDSEARCH - should never happen
 /// * Finds match but somehow there is no capture
 pub fn parse_global_op<'a>( g_op: &'a str )// {{{
-        -> Result<Vec<&'a str>, RedError> {
+        -> Result<(&'a str, &'a str), RedError> {
     let re_pattern: Regex = Regex::new( ADDR_REGEX_FWDSEARCH ).unwrap();
     let pattern: &'a str = match &re_pattern.captures( g_op ) {
         &Some(ref s) => s.at(1)
@@ -517,10 +514,7 @@ pub fn parse_global_op<'a>( g_op: &'a str )// {{{
     let (_, right) = re_pattern.find( g_op )
         .expect("parse_global_op: already proved match, now not matching");
     let commands: &'a str = &g_op[right ..];
-    let mut cmd_collection: Vec<&'a str> = commands.lines().collect();
-    println!("cmd: {:?}", cmd_collection);
-    cmd_collection.push( &pattern );
-    Ok( cmd_collection )
+    Ok( (pattern, commands) )
 }// }}}
 // }}}
 // ^^^ Functions ^^^ }}}
