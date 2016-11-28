@@ -42,8 +42,7 @@ pub struct Command<'a, 'b> {// {{{
     pub address_final: usize,
     pub operation: char,
     pub parameters: &'a str,
-    // constant struct that command will carry around with it
-    pub operations: &'b Operations,
+    pub operations: &'b Operations, // tagging along for the ride
 }// }}}
 pub struct Substitution {// {{{
     pub to_match: String,
@@ -62,8 +61,8 @@ pub fn parse_invocation( invoc_input: Vec<String>, state: &mut EditorState ) {//
     let mut indx: usize = 1;
     while indx < invoc_input.len() {
         if invoc_input[indx] == "-s" || invoc_input[indx] == "-" {
-            state.help = false;
-            state.messages = false;
+            state.show_help = false;
+            state.show_messages = false;
             //println!( "help and messages turned off (except this one)" );
             println!( "SILENT MODE ACTIVE" );
         } else if invoc_input[indx] == "-p" {

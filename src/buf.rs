@@ -33,7 +33,7 @@ use parse::*;
 // ^^^ Attributes ^^^ }}}
 
 // *** Constants *** {{{
-const NUM_LC: usize = 26;
+pub const NUM_LC: usize = 26;
 const SAVE_RETRIES: usize = 3;
 // ^^^ Constants ^^^ }}}
 
@@ -336,6 +336,8 @@ impl Buffer {   //{{{
     /// Delete line// {{{
     ///
     /// TODO: Add error handling, Result<> return?
+    ///     actually, I think I should remove error handling here; only error
+    ///     would be line doesn't exist, in which case we can just do nothing.
     pub fn delete_line( &mut self, address: usize )
             -> Result<(), RedError> {// {{{
         if address > self.lines.len() {
@@ -359,6 +361,7 @@ impl Buffer {   //{{{
     /// Insert new line at current position// {{{
     ///
     /// TODO: Add error handling, Result<> return?
+    ///     I don't think that will be necessary
     pub fn append_here( &mut self, new_line: &str ) {// {{{
         let address = self.current_line;
         self.append_line( address, new_line );
@@ -367,6 +370,7 @@ impl Buffer {   //{{{
     /// Insert new line// {{{
     ///
     /// TODO: Add error handling, Result<> return?
+    ///     I don't think that will be necessary
     pub fn append_line( &mut self, address: usize, new_line: &str ) {// {{{
         let mut back = self.lines.split_off( address );
         self.lines.push_back( new_line.to_string() );
@@ -380,6 +384,7 @@ impl Buffer {   //{{{
     /// Replace line with new string// {{{
     ///
     /// TODO: Add error handling; panics if address > len
+    ///     I don't think that will be necessary
     pub fn set_line_content( &mut self, address: usize, new_line: &str )// {{{
             -> Result<(), RedError> {
         if address > self.lines.len() {
@@ -418,7 +423,7 @@ impl Buffer {   //{{{
 // }}}
     /// Add new line marker// {{{
     ///
-    pub fn set_marker( &mut self, line: usize, label: char ) {// {{{
+    pub fn set_marker( &mut self, label: char, line: usize ) {// {{{
         self.markers[ (( label as u8 ) - ( 'a' as u8 )) as usize ] = line;
     }// }}}
 // }}}
@@ -950,6 +955,7 @@ mod tests {// {{{
         Buffer::new( BufferInput::File( test_file )).unwrap()
     }// }}}
 // }}}
+    /// Call file test buffer generator//{{{
     fn open_file_buffer_test( test_num: u8 ) -> Buffer {// {{{
         open_file_buffer_test_gen( test_num, FILE_CONTENT_LINE )
     }// }}}
@@ -974,6 +980,7 @@ mod tests {// {{{
         buffer
     }// }}}
 // }}}
+    /// Call command test buffer generator//{{{
     pub fn open_command_buffer_test( test_num: u8 )// {{{
             -> Buffer {
         open_command_buffer_test_gen( test_num, COMMAND_CONTENT_LINE )

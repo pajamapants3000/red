@@ -28,7 +28,7 @@ use buf::*;
 use error::*;
 use parse::*;
 use io::get_input;
-use ::{EditorState, EditorMode, print_help, print_msg, term_size};
+use ::{EditorState, EditorMode, print_help, print_msg, term_size, Change};
 use self::NotableLine::*;
 // ^^^ Bring in to namespace ^^^ }}}
 
@@ -321,6 +321,8 @@ fn placeholder( state: &mut EditorState, command: Command)//{{{
 fn append( state: &mut EditorState, command: Command )
         -> Result<(), RedError> {// {{{
     assert_eq!( 'a', command.operation );
+    state.u_reset();
+    state.u_lock();
     let ( _initial, _final ) = default_addrs( state, &command );
     state.buffer.set_current_address( _final );
     state.mode = EditorMode::Insert;
@@ -330,6 +332,8 @@ fn append( state: &mut EditorState, command: Command )
 fn change( state: &mut EditorState, command: Command )
         -> Result<(), RedError> {// {{{
     assert_eq!( 'c', command.operation );
+    state.u_reset();
+    state.u_lock();
     let ( _initial, _final ) = default_addrs( state, &command );
     let delete_command = Command{ address_initial: _initial,
             address_final: _final, operation: 'd', parameters: "",
@@ -338,13 +342,17 @@ fn change( state: &mut EditorState, command: Command )
             address_final: _initial, operation: 'i', parameters: "",
             operations: command.operations };
     try!( delete( state, delete_command ) );
-    insert( state, insert_command )
+    try!( insert( state, insert_command ) );
+    Ok( () )
 }//}}}
 // }}}
 fn delete( state: &mut EditorState, command: Command )
         -> Result<(), RedError> {// {{{
     assert_eq!( 'd', command.operation );
+    state.u_reset();
+    state.u_lock();
     let ( _initial, _final ) = default_addrs( state, &command );
+    state.u_address_delete_lines( _initial, _final );
     for _ in _initial .. ( _final + 1 ) {
         // NOTE: lines move as you delete them - don't increment!
         try!( state.buffer.delete_line( _initial ) );
@@ -363,11 +371,12 @@ fn edit( state: &mut EditorState, command: Command )
 fn edit_unsafe( state: &mut EditorState, command: Command )
         -> Result<(), RedError> {// {{{
     assert_eq!( 'E', command.operation );
+
     let content = command.parameters;
     if &content[0..1] == COMMAND_PREFIX {  // process command
         match Buffer::new( BufferInput::Command(content[1..].to_string() )) {
             Ok( _buffer ) => {
-                state.buffer = _buffer;
+                EditorState::new( _buffer );
             },
             Err(e) => {
                 return Err(e);
@@ -471,8 +480,8 @@ fn help_recall( state: &mut EditorState, command: Command )
 fn help_tgl( state: &mut EditorState, command: Command )
         -> Result<(), RedError> {// {{{
     assert_eq!( 'H', command.operation );
-    state.help = !state.help;
-    println!("help output set to {:?}", match state.help {
+    state.show_help = !state.show_help;
+    println!("help output set to {:?}", match state.show_help {
         true => "on",
         false => "off", });
     Ok( () )
@@ -480,6 +489,8 @@ fn help_tgl( state: &mut EditorState, command: Command )
 fn insert( state: &mut EditorState, command: Command )
         -> Result<(), RedError> {// {{{
     assert_eq!( 'i', command.operation );
+    state.u_reset();
+    state.u_lock();
     let ( _initial, _final ) = default_addrs( state, &command );
     state.buffer.set_current_address( _final - 1 );
     state.mode = EditorMode::Insert;
@@ -488,8 +499,12 @@ fn insert( state: &mut EditorState, command: Command )
 fn join( state: &mut EditorState, command: Command )
         -> Result<(), RedError> {// {{{
     assert_eq!( 'j', command.operation );
+    state.u_reset();
+    state.u_lock();
     let ( _initial, _final ) = default_addrs( state, &command );
+    state.u_address_delete_lines( _initial, _final );
     try!( state.buffer.join_lines( _initial, _final ));
+    state.u_this_added_line();
     Ok( () )
 }//}}}
 fn mark( state: &mut EditorState, command: Command )
@@ -521,7 +536,7 @@ fn mark( state: &mut EditorState, command: Command )
         },
     };
     // if given a section of lines, mark the beginning
-    state.buffer.set_marker( _final, mark_char );
+    state.buffer.set_marker( mark_char, _final );
     Ok( () )
 
 }//}}}
@@ -586,8 +601,11 @@ fn prompt_for_more( stdout_writer: &mut BufWriter<StdoutLock> ) {// {{{
 fn move_lines( state: &mut EditorState, command: Command )
         -> Result<(), RedError> {// {{{
     assert_eq!( 'm', command.operation );
+    state.u_reset();
+    state.u_lock();
     let mut destination: usize;
     let ( _initial, _final ) = default_addrs( state, &command );
+    state.u_address_delete_lines( _initial, _final );
     if command.parameters == "0" {
         destination = 0;
     } else {
@@ -595,10 +613,22 @@ fn move_lines( state: &mut EditorState, command: Command )
             .unwrap_or(state.buffer.get_current_address() );
     }
     try!( state.buffer.move_lines( &_initial, &_final, &destination ));
+    // destination is the address to which lines are appended,
+    // so it is one less than the first moved line
+    // if it is anywhere between the moved lines, it ends up just before
+    // initial
+    // XXX: wait... doesn't that mean it should be a no-op?
+    // save that for next update - this works for now.
     if (_initial-1) <= destination && destination <= _final {
         destination = _initial - 1;
     }
+    // we adjust dest. not by the diff, but num lines (hence the extra 1)
+    if _final < destination && destination <= state.buffer.num_lines() {
+        destination = destination - ( 1 + _final - _initial );
+    }
     state.buffer.set_current_address( destination + 1 + ( _final - _initial ));
+    state.u_address_added_lines( destination + 1,
+                                 destination + 1 + ( _final - _initial ));
     Ok( () )
 }//}}}
 // XXX: write built-in implementation in Buffer?
@@ -674,16 +704,22 @@ fn read( state: &mut EditorState, command: Command )
 fn substitute( state: &mut EditorState, command: Command )
         -> Result<(), RedError> {// {{{
     assert_eq!( 's', command.operation );
+    state.u_reset();
+    state.u_lock();
     let ( _initial, _final ) = default_addrs( state, &command );
+    state.u_address_delete_lines( _initial, _final );
     let sub_parms: Substitution = try!( parse_substitution_parameter(
             command.parameters ));
     state.buffer.substitute( &sub_parms.to_match, &sub_parms.to_sub,
                              sub_parms.which, _initial, _final );
+    state.u_address_added_lines( _initial, _final );
     Ok( () )
 }//}}}
 fn transfer( state: &mut EditorState, command: Command )
         -> Result<(), RedError> {// {{{
     assert_eq!( 't', command.operation );
+    state.u_reset();
+    state.u_lock();
     let destination: usize;
     let ( _initial, _final ) = default_addrs( state, &command );
     if command.parameters == "0" {
@@ -693,12 +729,42 @@ fn transfer( state: &mut EditorState, command: Command )
             .unwrap_or(state.buffer.get_current_address() );
     }
     try!( state.buffer.copy_lines( _initial, _final, destination ));
+    state.u_address_added_lines( destination + 1,
+                                 destination + 1 + ( _final - _initial ));
     Ok( () )
 }//}}}
 fn undo( state: &mut EditorState, command: Command )
         -> Result<(), RedError> {// {{{
     assert_eq!( 'u', command.operation );
-    placeholder( state, command )
+    let address = state.u_get_stored_address();
+    let mut markers = vec!( 0; NUM_LC );
+    for indx in ( 'a' as u8 ) .. ( 'z' as u8 ) + 1 {
+        markers[ ( indx as usize ) - ( 'a' as usize ) ] =
+            state.u_get_marked_address( indx as char );
+    }
+    let mut changes = state.undo.changes.clone();
+    state.u_unlock();
+    state.u_reset();
+    state.u_lock();
+    loop {
+        match changes.pop() {
+            Some( Change::Add{ address: _address }) => {
+                state.u_address_delete_line( _address );
+                try!( state.buffer.delete_line( _address ) );
+            },
+            Some( Change::Remove{ address: _address, content: _content }) => {
+                state.u_address_added_line( _address );
+                state.buffer.append_line( _address - 1, &_content );
+            },
+            None => break,
+        }
+    }
+    state.buffer.set_current_address( address );
+    for indx in ( 'a' as u8 ) .. ( 'z' as u8 ) + 1 {
+        state.buffer.set_marker( indx as char,
+            markers[ ( indx as usize ) - ( 'a' as usize ) ] );
+    }
+    Ok( () )
 }//}}}
 fn global_inverse( state: &mut EditorState,//{{{
                    command: Command ) -> Result<(), RedError> {
@@ -768,12 +834,12 @@ fn append_to_disk( state: &mut EditorState,//{{{
     state.buffer.write_to_disk( command.parameters, true, _initial, _final )
 }//}}}
 
-/// Return pair of lines, either original or the specified defaults
+/// Return pair of lines, either original or the specified defaults// {{{
 ///
 /// Defaults are used if both original integers are 0;
 /// Also fixes lower address to be 1 instead of zero if an otherwise
 /// suitable range is provided;
-fn default_addrs( state: &EditorState, command: &Command ) -> (usize, usize) {
+fn default_addrs( state: &EditorState, command: &Command ) -> (usize, usize) {// {{{
     let default_i = match command.operations.operation_map
                 .get( &command.operation ).unwrap().default_initial_address {
         FirstLine => 1,
@@ -799,7 +865,7 @@ fn default_addrs( state: &EditorState, command: &Command ) -> (usize, usize) {
     } else {
         ( command.address_initial, command.address_final )
     }
-}
-
+}// }}}
+// }}}
 // ^^^ Functions ^^^ }}}
 

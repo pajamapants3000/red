@@ -1,5 +1,3 @@
-* undo
-* global (+int, rev)
 * // and ?? repeat last search
 * accept escaped '/' and '?' in fwd and rev regex searches, respectively
 * accept any delimiter in sub commands, not just /
