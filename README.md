@@ -1,14 +1,17 @@
 # red
 ed implementation in rust
 
-Following the manpage for the OpenBSD version of ed, my intention
-is to implement the same behavior and functionality present there.
+I have recently discovered that "red" is a synonym for ed, I believe with
+the "-r" (restricted) flag. So... I may want to change the name at some
+point.
 
-Once this goal has been reached, I may consider developing further. Or
-perhaps I will simply move on (maybe come back later). This particular
-project is less about need or use and more about practicing Rust.
+I have endeavored to implement the functionality of ed as described in the
+OpenBSD ed man page.
 
-Most of the functionality has been implemented. The only major feature
-remaining that comes to mind is undo. There is also a lot of cleaning
-and testing still to be done.
+The project is almost complete! Just some minor changes and improvements
+I would still like to accomplish.
+
+For usage information, see the OpenBSD ed man page. It can be found at:
+
+  http://man.openbsd.org/ed.1
 
