@@ -7,3 +7,7 @@
 * buffer should handle is_modified itself
 * buffer should handle close (check is_modified, delete temp) itself
 
+bugs
+* undo reverts address back to first matching line on last global-type
+command, rather than the address from which the global command was
+executed

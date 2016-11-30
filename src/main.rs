@@ -63,6 +63,8 @@ pub struct EditorState {
     source: String,
     /// most recent help, warning, or error message
     last_help: String,
+    /// last regex used in address search
+    last_regex: String,
     /// structure containing enough information to roll back latest change
     undo: Undo,
 }
@@ -75,61 +77,56 @@ impl EditorState {
         EditorState { mode: DEFAULT_MODE, show_help: DEFAULT_HELP,
             show_messages: DEFAULT_MESSAGES, prompt: DEFAULT_PROMPT.to_string(),
             buffer: _buffer, source: String::new(), last_help: String::new(),
-            undo: EditorState::u_new(), }
+            last_regex: String::new(), undo: Undo::new(), }
     }// }}}
 // }}}
-
+    /// Store string in last_regex// {{{
+    pub fn store_last_regex( &mut self, re_str: &str ) {// {{{
+        self.last_regex = re_str.to_string()
+    }// }}}
+    // }}}
+    /// Obtain string from last_regex// {{{
+    pub fn get_last_regex( &mut self ) -> String {// {{{
+        self.last_regex.clone()
+    }// }}}
+    // }}}
+    /// Reset undo - only need if we can't state.undo.reset( &state.buffer )
     pub fn u_reset( &mut self ) {
-        if !self.undo.is_locked {
-            let mut _markers = vec!( 0; NUM_LC );
-            for indx in ( 'a' as u8 ) .. ( 'z' as u8 ) + 1 {
-                _markers[ ( indx as usize ) - ( 'a' as usize ) ] =
-                    self.buffer.get_marked_line( indx as char );
-            }
-            self.undo.changes = Vec::new();
-            self.undo.address = self.buffer.get_current_address();
-            self.undo.markers = _markers;
-        }
-    }
-    pub fn u_lock( &mut self ) {
-        self.undo.is_locked = true;
-    }
-    pub fn u_unlock( &mut self ) {
-        self.undo.is_locked = false;
+        self.undo.reset( &self.buffer )
     }
     /// Record line number of added line// {{{
-    pub fn u_address_added_line( &mut self, _address: usize ) {// {{{
-        self.undo.changes.push( Change::Add{ address: _address });
+    pub fn u_added_line( &mut self, address: usize ) {// {{{
+        self.undo.added_lines( address, address )
     }// }}}
     // }}}
     /// Record line number of added line// {{{
-    pub fn u_this_added_line( &mut self ) {// {{{
-        self.undo.changes.push( Change::Add{
-            address: self.buffer.get_current_address() });
+    pub fn u_added_current_line( &mut self ) {// {{{
+        let current_address = self.buffer.get_current_address();
+        self.undo.added_lines( current_address, current_address )
     }// }}}
     // }}}
     /// Record range of added lines// {{{
     ///
     /// # Panics
     /// _initial and/or _final are not a valid address ( in range [1,$] )
-    pub fn u_address_added_lines( &mut self,// {{{
+    pub fn u_added_lines( &mut self,// {{{
                                       _initial: usize, _final: usize ) {
         assert!( 0 < _initial && _initial <= self.buffer.num_lines() );
         assert!( 0 < _final && _final <= self.buffer.num_lines() );
-        for _address in _initial .. _final + 1 {
-            self.undo.changes.push( Change::Add{ address: _address });
-        }
-    }// }}}
-// }}}
-    /// Record line number of added line// {{{
-    pub fn u_address_delete_line( &mut self, _address: usize ) {// {{{
-        self.u_address_delete_lines( _address, _address );
+        self.undo.added_lines( _initial, _final )
     }// }}}
     // }}}
-    /// Record line number of added line// {{{
-    pub fn u_this_delete_line( &mut self ) {// {{{
-        let address = self.buffer.get_current_address();
-        self.u_address_delete_line( address );
+    /// Store current line, to be removed, in Undo structure// {{{
+    ///
+    /// do we use this?
+    pub fn u_deleting_current_line( &mut self ) {// {{{
+        let current_address = self.buffer.get_current_address();
+        self.undo.deleting_line( &self.buffer, current_address )
+    }// }}}
+    // }}}
+    /// Store provided line, to be removed, in Undo structure// {{{
+    pub fn u_deleting_line( &mut self, address: usize ) {// {{{
+        self.undo.deleting_line( &self.buffer, address )
     }// }}}
     // }}}
     /// Store lines to be removed, with addresses, in Undo structure// {{{
@@ -138,51 +135,39 @@ impl EditorState {
     /// _initial and/or _final are not a valid address ( in range [0,$] )
     /// Confirmed address still returns None for buffer::get_line_content ( This
     ///     should never be logically possible! )
-    pub fn u_address_delete_lines( &mut self,// {{{
+    pub fn u_deleting_lines( &mut self,// {{{
                                        _initial: usize, _final: usize ) {
         // can be 0: e.g. when inserting first line
         assert!( _initial <= self.buffer.num_lines() );
         assert!( _final <= self.buffer.num_lines() );
-        for _address in _initial .. _final + 1 {
-        // to delete range, delete same address repeatedly on _initial
-            self.undo.changes.push( Change::Remove{ address: _initial,
-        // however, not ACTUALLY deleting right now, so we have to increment
-        // to get the correct content to save - use _address
-                    content: self.buffer.get_line_content( _address )
-                    .expect( &( "main::u_address_delete_lines: ".to_string() +
-                                "unexpected missing line" ))
-                    .to_string() });
-        }
+        self.undo.deleting_lines( &self.buffer, _initial, _final )
     }// }}}
     // }}}
-    /// Store current address in undo// {{{
-    pub fn u_store_here_address( &mut self ) {// {{{
-        self.undo.address = self.buffer.get_current_address();
+    /// Get collection of markers//{{{
+    pub fn u_get_markers( &self ) -> Vec<usize> {// {{{
+        self.undo.get_markers()
     }// }}}
     // }}}
-    /// Store provided address in undo// {{{
-    pub fn u_store_address( &mut self, address: usize ) {// {{{
-        self.undo.address = address;
+    /// Get collection of saved changes//{{{
+    pub fn u_get_changes( &self ) -> Vec<Change> {// {{{
+        self.undo.get_changes()
     }// }}}
     // }}}
-    /// Obtain stored address// {{{
-    pub fn u_get_stored_address( &self ) -> usize {// {{{
-        self.undo.address
+    /// Lock undo structure//{{{
+    pub fn u_lock( &mut self ) {// {{{
+        self.undo.lock()
     }// }}}
-    //}}}
-    /// Get address associated with certain marker character// {{{
-    pub fn u_get_marked_address( &self, ch: char ) -> usize {// {{{
-        self.undo.markers[ (( ch as u8 ) - ( 'a' as u8 )) as usize ]
+    // }}}
+    /// Unlock undo structure//{{{
+    pub fn u_unlock( &mut self ) {// {{{
+        self.undo.unlock()
     }// }}}
-    //}}}
-    fn u_new() -> Undo {
-        Undo {
-            changes: Vec::new(),
-            address: 0_usize,
-            markers: vec!( 0; NUM_LC ),
-            is_locked: false,
-        }
-    }
+    // }}}
+    /// Unlock undo structure//{{{
+    pub fn u_get_wascurrent_address( &self ) -> usize {// {{{
+        self.undo.get_wascurrent_address()
+    }// }}}
+    // }}}
 }
 #[derive(Clone)]
 pub enum EditorMode {
@@ -207,14 +192,92 @@ struct Undo {
     /// removed lines are re-inserted.
     changes: Vec<Change>,
     /// current address before the change
-    address: usize,
+    wascurrent_address: usize,
     /// markers before the change
     markers: Vec<usize>,
     /// lock the structure for complex operations
     is_locked: bool
 }
+impl Undo {
+    pub fn reset( &mut self, buffer: &Buffer ) {
+        if !self.is_locked {
+            let mut _markers = vec!( 0; NUM_LC );
+            for indx in ( 'a' as u8 ) .. ( 'z' as u8 ) + 1 {
+                _markers[ ( indx as usize ) - ( 'a' as usize ) ] =
+                    buffer.get_marked_line( indx as char );
+            }
+            self.changes = Vec::new();
+            self.wascurrent_address = buffer.get_current_address();
+            self.markers = _markers;
+        }
+    }
+    pub fn lock( &mut self ) {
+        self.is_locked = true;
+    }
+    pub fn unlock( &mut self ) {
+        self.is_locked = false;
+    }
+    /// Record range of added lines// {{{
+    ///
+    /// # Panics
+    /// _initial and/or _final are not a valid address ( in range [1,$] )
+    pub fn added_lines( &mut self,// {{{
+                                      _initial: usize, _final: usize ) {
+        for _address in _initial .. _final + 1 {
+            self.changes.push( Change::Add{ address: _address });
+        }
+    }// }}}
+    // }}}
+    /// Store provided line, to be removed, in Undo structure// {{{
+    pub fn deleting_line( &mut self, buffer: &Buffer, address: usize ) {// {{{
+        self.deleting_lines( buffer, address, address )
+    }// }}}
+    // }}}
+    /// Store lines to be removed, with addresses, in Undo structure// {{{
+    ///
+    /// # Panics
+    /// _initial and/or _final are not a valid address ( in range [0,$] )
+    /// Confirmed address still returns None for buffer::get_line_content ( This
+    ///     should never be logically possible! )
+    pub fn deleting_lines( &mut self, buffer: &Buffer,// {{{
+                                       _initial: usize, _final: usize ) {
+        for _address in _initial .. _final + 1 {
+        // to delete range, delete same address repeatedly on _initial
+            self.changes.push( Change::Remove{ address: _initial,
+        // however, not ACTUALLY deleting right now, so we have to increment
+        // to get the correct content to save - use _address
+                    content: buffer.get_line_content( _address )
+                    .expect( &( "main::u_deleting_lines: ".to_string() +
+                                "unexpected missing line" ))
+                    .to_string() });
+        }
+    }// }}}
+    // }}}
+    /// Obtain stored address// {{{
+    pub fn get_wascurrent_address( &self ) -> usize {// {{{
+        self.wascurrent_address
+    }// }}}
+    //}}}
+    /// Get collection of markers//{{{
+    pub fn get_markers( &self ) -> Vec<usize> {// {{{
+        self.markers.clone()
+    }// }}}
+    /// Get collection of saved changes//{{{
+    pub fn get_changes( &self ) -> Vec<Change> {// {{{
+        self.changes.clone()
+    }// }}}
+    //}}}
+    fn new() -> Undo {
+        Undo {
+            changes: Vec::new(),
+            wascurrent_address: 0_usize,
+            markers: vec!( 0; NUM_LC ),
+            is_locked: false,
+        }
+    }
+}
 #[derive(Clone)]
-enum Change {
+pub enum Change {
     Add { address: usize },
     Remove { address: usize, content: String },
 }
@@ -287,7 +350,7 @@ fn main() {// {{{
                     state.mode = EditorMode::Command;
                 } else {
                     state.buffer.append_here( &input );
-                    state.u_this_added_line();
+                    state.u_added_current_line();
                     state.mode = EditorMode::Insert;
                 }
             },

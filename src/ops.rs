@@ -352,7 +352,7 @@ fn delete( state: &mut EditorState, command: Command )
     state.u_reset();
     state.u_lock();
     let ( _initial, _final ) = default_addrs( state, &command );
-    state.u_address_delete_lines( _initial, _final );
+    state.u_deleting_lines( _initial, _final );
     for _ in _initial .. ( _final + 1 ) {
         // NOTE: lines move as you delete them - don't increment!
         try!( state.buffer.delete_line( _initial ) );
@@ -502,9 +502,9 @@ fn join( state: &mut EditorState, command: Command )
     state.u_reset();
     state.u_lock();
     let ( _initial, _final ) = default_addrs( state, &command );
-    state.u_address_delete_lines( _initial, _final );
+    state.u_deleting_lines( _initial, _final );
     try!( state.buffer.join_lines( _initial, _final ));
-    state.u_this_added_line();
+    state.u_added_current_line();
     Ok( () )
 }//}}}
 fn mark( state: &mut EditorState, command: Command )
@@ -605,7 +605,7 @@ fn move_lines( state: &mut EditorState, command: Command )
     state.u_lock();
     let mut destination: usize;
     let ( _initial, _final ) = default_addrs( state, &command );
-    state.u_address_delete_lines( _initial, _final );
+    state.u_deleting_lines( _initial, _final );
     if command.parameters == "0" {
         destination = 0;
     } else {
@@ -627,7 +627,7 @@ fn move_lines( state: &mut EditorState, command: Command )
         destination = destination - ( 1 + _final - _initial );
     }
     state.buffer.set_current_address( destination + 1 + ( _final - _initial ));
-    state.u_address_added_lines( destination + 1,
+    state.u_added_lines( destination + 1,
                                  destination + 1 + ( _final - _initial ));
     Ok( () )
 }//}}}
@@ -707,12 +707,12 @@ fn substitute( state: &mut EditorState, command: Command )
     state.u_reset();
     state.u_lock();
     let ( _initial, _final ) = default_addrs( state, &command );
-    state.u_address_delete_lines( _initial, _final );
+    state.u_deleting_lines( _initial, _final );
     let sub_parms: Substitution = try!( parse_substitution_parameter(
             command.parameters ));
     state.buffer.substitute( &sub_parms.to_match, &sub_parms.to_sub,
                              sub_parms.which, _initial, _final );
-    state.u_address_added_lines( _initial, _final );
+    state.u_added_lines( _initial, _final );
     Ok( () )
 }//}}}
 fn transfer( state: &mut EditorState, command: Command )
@@ -729,31 +729,27 @@ fn transfer( state: &mut EditorState, command: Command )
             .unwrap_or(state.buffer.get_current_address() );
     }
     try!( state.buffer.copy_lines( _initial, _final, destination ));
-    state.u_address_added_lines( destination + 1,
+    state.u_added_lines( destination + 1,
                                  destination + 1 + ( _final - _initial ));
     Ok( () )
 }//}}}
 fn undo( state: &mut EditorState, command: Command )
         -> Result<(), RedError> {// {{{
     assert_eq!( 'u', command.operation );
-    let address = state.u_get_stored_address();
-    let mut markers = vec!( 0; NUM_LC );
-    for indx in ( 'a' as u8 ) .. ( 'z' as u8 ) + 1 {
-        markers[ ( indx as usize ) - ( 'a' as usize ) ] =
-            state.u_get_marked_address( indx as char );
-    }
-    let mut changes = state.undo.changes.clone();
+    let address = state.u_get_wascurrent_address();
+    let markers = state.u_get_markers();
+    let mut changes = state.u_get_changes();
     state.u_unlock();
     state.u_reset();
     state.u_lock();
     loop {
         match changes.pop() {
             Some( Change::Add{ address: _address }) => {
-                state.u_address_delete_line( _address );
+                state.u_deleting_line( _address );
                 try!( state.buffer.delete_line( _address ) );
             },
             Some( Change::Remove{ address: _address, content: _content }) => {
-                state.u_address_added_line( _address );
+                state.u_added_line( _address );
                 state.buffer.append_line( _address - 1, &_content );
             },
             None => break,
