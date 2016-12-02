@@ -90,7 +90,7 @@ pub fn parse_invocation( invoc_input: Vec<String>, state: &mut EditorState ) {//
 ///
 /// This is the public interface to the parse module
 ///
-pub fn parse_command<'a,'b>( _cmd_input: &'a str, state: &EditorState,//{{{
+pub fn parse_command<'a,'b>( _cmd_input: &'a str, state: &mut EditorState,//{{{
         _operations: &'b Operations ) -> Result<Command<'a, 'b>, RedError> {
     // MUST initialize?
     let mut _address_initial: usize = 1;
@@ -119,7 +119,7 @@ pub fn parse_command<'a,'b>( _cmd_input: &'a str, state: &EditorState,//{{{
                 },
             }
             let ( _address_initial, _address_final ) = try!(
-                    get_address_range( addrs, &state.buffer ) );
+                    get_address_range( addrs, state ) );
 
             Ok( Command {
                     address_initial: _address_initial,
@@ -141,7 +141,7 @@ pub fn parse_command<'a,'b>( _cmd_input: &'a str, state: &EditorState,//{{{
 /// ?
 /// Should this print lines 13-25 or ignore 13 and just print 25?
 /// Probably want to ignore. or error?
-fn get_address_range( address_string: &str, buffer: &Buffer )// {{{
+fn get_address_range( address_string: &str, state: &mut EditorState )// {{{
             -> Result<(usize, usize), RedError> {
     let (left, right) = match address_string.trim() {
         "%" => ( "1", "$" ),
@@ -151,10 +151,10 @@ fn get_address_range( address_string: &str, buffer: &Buffer )// {{{
         _ => parse_address_list( address_string ),
     };
 
-    let result_right = try!(parse_address_field( right, buffer )).unwrap();
+    let result_right = try!(parse_address_field( right, state )).unwrap();
     let result_left = match left.len() {
         0 => result_right,
-        _ => try!(parse_address_field( left, buffer )).unwrap(),
+        _ => try!(parse_address_field( left, state )).unwrap(),
     };
     Ok( (result_left, result_right) )
 
@@ -279,7 +279,7 @@ fn calc_address_field( address: &str, buffer: &Buffer )// {{{
 }// }}}
 // }}}
 /// Parse address field; convert regex or integer into line number// {{{
-pub fn parse_address_field( address: &str, buffer: &Buffer )// {{{
+pub fn parse_address_field( address: &str, state: &mut EditorState )// {{{
             -> Result<Option<usize>, RedError> {
     let re_fwdsearch: Regex = Regex::new( ADDR_REGEX_FWDSEARCH ).unwrap();
     let re_revsearch: Regex = Regex::new( ADDR_REGEX_REVSEARCH ).unwrap();
@@ -290,34 +290,44 @@ pub fn parse_address_field( address: &str, buffer: &Buffer )// {{{
     } else if address.len() == 1 && address != "+" && address != "-" {
         match address {
             "." => {
-                Ok( Some( buffer.get_current_address() ))
+                Ok( Some( state.buffer.get_current_address() ))
             },
             "$" => {
-                Ok( Some( buffer.num_lines() ))
+                Ok( Some( state.buffer.num_lines() ))
             },
             _ => {
                 match address.parse() {
-                Ok(x) => Ok( Some( normalize_address( &buffer, x ) )),
+                Ok(x) => Ok( Some( normalize_address( &state.buffer, x ) )),
                 Err(_) => Err( RedError::AddressSyntax {
                     address: "parsefield1:".to_string() + address } ),
                 }
             },
         }
     } else if re_fwdsearch.is_match( address ) {    // forward regex search?
-        Ok( buffer.find_match( re_fwdsearch.captures( address )
-                               .unwrap().at(1).unwrap() ))
+        let _to_match = re_fwdsearch.captures( address )
+               .expect("parse_address_field: matched, now not matching...?")
+               .at(1).expect("parse_address_field: missing expected capture");
+        if _to_match.trim().len() != 0 {
+            state.last_regex = _to_match.to_string();
+        }
+        Ok( state.buffer.find_match( &state.last_regex ))
     } else if re_revsearch.is_match( address ) {    // backward regex search?
-        Ok( buffer.find_match_reverse( re_revsearch.captures( address )
-                               .unwrap().at(1).unwrap() ))
+        let _to_match = re_revsearch.captures( address )
+               .expect("parse_address_field: matched, now not matching...?")
+               .at(1).expect("parse_address_field: missing expected capture");
+        if _to_match.trim().len() != 0 {
+            state.last_regex = _to_match.to_string();
+        }
+        Ok( state.buffer.find_match_reverse( &state.last_regex ))
     } else {    // otherwise, replace any markers and calculate/parse
         let _address: &str = &re_marker.replace( address, |caps: &Captures| {
-            buffer.get_marked_line( caps.at(1).unwrap_or("A").chars()
+            state.buffer.get_marked_line( caps.at(1).unwrap_or("A").chars()
                                     .next().unwrap_or('A') ).to_string() });
         if re_rithmetic.is_match( _address ) {  // +/- operation(s)
-            calc_address_field( _address, &buffer )
+            calc_address_field( _address, &state.buffer )
         } else {                                // just a (multi-digit) number
             match _address.parse() {
-            Ok(x) => Ok( Some( normalize_address( &buffer, x ) )),
+            Ok(x) => Ok( Some( normalize_address( &state.buffer, x ) )),
             Err(_) => Err( RedError::AddressSyntax{
                     address: "parsefield2:".to_string() + _address } )
             }

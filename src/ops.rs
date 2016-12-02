@@ -609,8 +609,8 @@ fn move_lines( state: &mut EditorState, command: Command )
     if command.parameters == "0" {
         destination = 0;
     } else {
-    destination = try!(parse_address_field(command.parameters, &state.buffer))
-            .unwrap_or(state.buffer.get_current_address() );
+    destination = try!( parse_address_field( command.parameters, state ))
+            .unwrap_or( state.buffer.get_current_address() );
     }
     try!( state.buffer.move_lines( &_initial, &_final, &destination ));
     // destination is the address to which lines are appended,
@@ -725,7 +725,7 @@ fn transfer( state: &mut EditorState, command: Command )
     if command.parameters == "0" {
         destination = 0;
     } else {
-    destination = try!(parse_address_field(command.parameters, &state.buffer))
+    destination = try!(parse_address_field(command.parameters, state ))
             .unwrap_or(state.buffer.get_current_address() );
     }
     try!( state.buffer.copy_lines( _initial, _final, destination ));

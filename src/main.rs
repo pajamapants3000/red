@@ -326,7 +326,7 @@ fn main() {// {{{
                     continue;   // set default command? e.g. print cur addr?
                 }
                 let command: Command;
-                match parse_command( &input, &state, &operations ) {
+                match parse_command( &input, &mut state, &operations ) {
                     Ok(x) => {
                         command = x;
                     }
