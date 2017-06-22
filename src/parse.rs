@@ -535,6 +535,7 @@ pub fn parse_global_op<'a>( g_op: &'a str )// {{{
 mod tests {
     use super::{get_opchar_index, is_in_regex, parse_address_field, parse_address_list, get_address_range, is_address_separator};
     use buf::*;
+    use ::EditorState;
 
     const COMMAND_CONTENT_LINE: &'static str = "this is a test; number";
     const COMMAND_FILE_SUFFIX: &'static str = ".cmd";
@@ -544,7 +545,7 @@ mod tests {
     ///
     /// uses test_lines function to create file with which buffer
     /// is initialized
-    pub fn open_command_buffer_test( test_num: u8 ) -> Buffer {// {{{
+    pub fn open_command_buffer_test( test_num: u8 ) -> EditorState {// {{{
         //
         let num_lines: usize = 7;   // number of lines to have in buffer
         let command_content_line = COMMAND_CONTENT_LINE;
@@ -557,12 +558,12 @@ mod tests {
                 .unwrap();
         buffer.move_file( &test_file ).unwrap();
         buffer.set_current_address( 1 );
-        buffer
+        EditorState::new(buffer)
     }// }}}
     /// deconstruct buffer from "command buffer" test;
     /// any other necessary closing actions
-    pub fn close_command_buffer_test( buffer: &mut Buffer ) {// {{{
-        buffer.destruct();
+    pub fn close_command_buffer_test( state: &mut EditorState ) {// {{{
+        state.buffer.destruct();
     }// }}}
     // begin prep functions
     /// Generate and return string containing lines for testing
@@ -729,7 +730,7 @@ mod tests {
         let ini_expected: usize = 1;
         let fin_expected: usize = 3;
         //
-        let ( ini, fin ) = get_address_range( address_string, &buffer ).unwrap();
+        let ( ini, fin ) = get_address_range( address_string, &mut buffer ).unwrap();
         assert_eq!( ini, ini_expected );
         assert_eq!( fin, fin_expected );
         // Common test close routine
@@ -746,7 +747,7 @@ mod tests {
         let ini_expected: usize = 1;
         let fin_expected: usize = 8;
         //
-        let ( ini, fin ) = get_address_range( address_string, &buffer ).unwrap();
+        let ( ini, fin ) = get_address_range( address_string, &mut buffer ).unwrap();
         assert_eq!( ini, ini_expected );
         assert_eq!( fin, fin_expected );
         // Common test close routine
@@ -763,7 +764,7 @@ mod tests {
         let ini_expected: usize = 1;
         let fin_expected: usize = 4;
         //
-        let ( ini, fin ) = get_address_range( address_string, &buffer ).unwrap();
+        let ( ini, fin ) = get_address_range( address_string, &mut buffer ).unwrap();
         assert_eq!( ini, ini_expected );
         assert_eq!( fin, fin_expected );
         // Common test close routine
@@ -780,7 +781,7 @@ mod tests {
         let ini_expected: usize = 1;
         let fin_expected: usize = 5;
         //
-        let ( ini, fin ) = get_address_range( address_string, &buffer )
+        let ( ini, fin ) = get_address_range( address_string, &mut buffer )
             .unwrap_or( (0_usize, 0_usize) );
         assert_eq!( ini, ini_expected );
         assert_eq!( fin, fin_expected );
@@ -845,7 +846,7 @@ mod tests {
         let address_string: &str = "1";
         let expected: usize = 1;
         //
-        let result = parse_address_field( address_string, &buffer )
+        let result = parse_address_field( address_string, &mut buffer )
             .unwrap()
             .unwrap();
         assert_eq!( result, expected );
@@ -862,7 +863,7 @@ mod tests {
         let address_string: &str = "56";
         let expected: usize = 8;            // num_lines
         //
-        let result = parse_address_field( address_string, &buffer )
+        let result = parse_address_field( address_string, &mut buffer )
             .unwrap()
             .unwrap();
         assert_eq!( result, expected );
@@ -879,7 +880,7 @@ mod tests {
         let address_string: &str = "0";
         let expected: usize = 1;
         //
-        let result = parse_address_field( address_string, &buffer )
+        let result = parse_address_field( address_string, &mut buffer )
             .unwrap()
             .unwrap();
         assert_eq!( result, expected );
@@ -896,7 +897,7 @@ mod tests {
         let address_string: &str = "/number3/";
         let expected: usize = 3;
         //
-        let result = parse_address_field( address_string, &buffer )
+        let result = parse_address_field( address_string, &mut buffer )
             .unwrap()
             .unwrap();
         assert_eq!( result, expected );
@@ -913,7 +914,7 @@ mod tests {
         let address_string: &str = "?number4?";
         let expected: usize = 4;
         //
-        let result = parse_address_field( address_string, &buffer )
+        let result = parse_address_field( address_string, &mut buffer )
             .unwrap()
             .unwrap();
         assert_eq!( result, expected );
@@ -930,7 +931,7 @@ mod tests {
         let address_string: &str = "/badtestcmd/";     // no match
         let expected: Option<usize> = None;
         //
-        let result = parse_address_field( address_string, &buffer )
+        let result = parse_address_field( address_string, &mut buffer )
             .unwrap();
         assert_eq!( result, expected );
         // Common test close routine
@@ -946,7 +947,7 @@ mod tests {
         let address_string: &str = "/test; num/";
         let expected: usize = 1;
         //
-        let result = parse_address_field( address_string, &buffer )
+        let result = parse_address_field( address_string, &mut buffer )
             .unwrap()
             .unwrap();
         assert_eq!( result, expected );
@@ -963,7 +964,7 @@ mod tests {
         let address_string: &str = ".-3";
         let expected: usize = 1;
         //
-        let result = parse_address_field( address_string, &buffer )
+        let result = parse_address_field( address_string, &mut buffer )
             .unwrap()
             .unwrap();
         assert_eq!( result, expected );
@@ -980,7 +981,7 @@ mod tests {
         let address_string: &str = "    + ";
         let expected: usize = 2;
         //
-        let result = parse_address_field( address_string, &buffer )
+        let result = parse_address_field( address_string, &mut buffer )
             .unwrap()
             .unwrap();
         assert_eq!( result, expected );
@@ -997,7 +998,7 @@ mod tests {
         let address_string: &str = "5- 3";
         let expected: usize = 2;
         //
-        let result = parse_address_field( address_string, &buffer )
+        let result = parse_address_field( address_string, &mut buffer )
             .unwrap()
             .unwrap();
         assert_eq!( result, expected );
@@ -1014,7 +1015,7 @@ mod tests {
         let address_string: &str = "  . + 1      ";
         let expected: usize = 2;
         //
-        let result = parse_address_field( address_string, &buffer )
+        let result = parse_address_field( address_string, &mut buffer )
             .unwrap()
             .unwrap();
         assert_eq!( result, expected );
@@ -1031,7 +1032,7 @@ mod tests {
         let address_string: &str = "7 --  1- 3 ";
         let expected: usize = 2;
         //
-        let result = parse_address_field( address_string, &buffer )
+        let result = parse_address_field( address_string, &mut buffer )
             .unwrap()
             .unwrap();
         assert_eq!( result, expected );
@@ -1048,7 +1049,7 @@ mod tests {
         let address_string: &str = "  . +1-- -+5";
         let expected: usize = 4;
         //
-        let result = parse_address_field( address_string, &buffer )
+        let result = parse_address_field( address_string, &mut buffer )
             .unwrap()
             .unwrap();
         assert_eq!( result, expected );
@@ -1065,7 +1066,7 @@ mod tests {
         let address_string: &str = "$ - 3";
         let expected: usize = 5;
         //
-        let result = parse_address_field( address_string, &buffer )
+        let result = parse_address_field( address_string, &mut buffer )
             .unwrap()
             .unwrap();
         assert_eq!( result, expected );
@@ -1082,7 +1083,7 @@ mod tests {
         let address_string: &str = " -5";
         let expected: usize = 1;
         //
-        let result = parse_address_field( address_string, &buffer )
+        let result = parse_address_field( address_string, &mut buffer )
             .unwrap()
             .unwrap();
         assert_eq!( result, expected );
